@@ -16,15 +16,20 @@ script_dir = os.path.dirname(script_path)
 
 messages = []
 
-@bot.message_handler(commands=['setup','start'])
-def setup(message):
-    messages.append({'role':'user','content':'Hello. My name is ' + message.from_user.first_name})
+def get_response(content):
+    messages.append({'role':'user','content':content})
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
         messages=messages
     )
     messages.append(response.choices[0].message)
-    bot.reply_to(message, response.choices[0].message.content)
+    return response.choices[0].message.content
+
+
+@bot.message_handler(commands=['setup','start'])
+def setup(message):
+    response = get_response('Hello. My name is ' + message.from_user.first_name)
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=['imagine'])
 def imagine(message):
@@ -46,22 +51,12 @@ def voice_processing(message):
     ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
     ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
     transcript = openai.Audio.transcribe("whisper-1", open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
-    messages.append({'role':'user','content':transcript.text})
-    response = openai.ChatCompletion.create(
-        model='gpt-3.5-turbo',
-        messages=messages
-    )
-    messages.append(response.choices[0].message)
-    bot.reply_to(message, response.choices[0].message.content)
+    response = get_response(transcript)
+    bot.reply_to(message, response)
 
 @bot.message_handler()
 def catch_all(message):
-    messages.append({'role':'user','content':message.text})
-    response = openai.ChatCompletion.create(
-        model='gpt-3.5-turbo',
-        messages=messages
-    )
-    messages.append(response.choices[0].message)
-    bot.reply_to(message, response.choices[0].message.content)
+    response = get_response(message.text)
+    bot.reply_to(message, response)
 
 bot.infinity_polling()
