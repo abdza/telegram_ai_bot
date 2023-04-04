@@ -9,6 +9,11 @@ from pydub import AudioSegment
 bot = telebot.TeleBot(settings.telebot_key)
 openai.api_key = settings.openai_key
 
+script_path = os.path.abspath(__file__)
+
+# Get the directory containing the current script
+script_dir = os.path.dirname(script_path)
+
 messages = []
 
 @bot.message_handler(commands=['setup','start'])
@@ -36,11 +41,11 @@ def voice_processing(message):
     file_info = bot.get_file(message.voice.file_id)
     downloaded_file = bot.download_file(file_info.file_path)
     filename = 'voice_' + str(message.from_user.id)
-    with open(os.path.join('voices',filename + '.ogg'), 'wb') as new_file:
+    with open(os.path.join(script_dir,'voices',filename + '.ogg'), 'wb') as new_file:
         new_file.write(downloaded_file)
-    ogg_audio = AudioSegment.from_file(os.path.join('voices',filename + '.ogg'), format="ogg")
-    ogg_audio.export(os.path.join('voices',filename + '.mp3'), format="mp3")
-    transcript = openai.Audio.transcribe("whisper-1", open(os.path.join('voices',filename + '.mp3'),'rb'))
+    ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
+    ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
+    transcript = openai.Audio.transcribe("whisper-1", open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
     messages.append({'role':'user','content':transcript.text})
     response = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
