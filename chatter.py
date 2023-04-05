@@ -4,6 +4,7 @@ import telebot
 import openai
 import settings
 import os
+import textract
 from pydub import AudioSegment
 
 bot = telebot.TeleBot(settings.telebot_key)
@@ -28,35 +29,61 @@ def get_response(content):
 
 @bot.message_handler(commands=['setup','start'])
 def setup(message):
-    response = get_response('Hello. My name is ' + message.from_user.first_name)
-    bot.reply_to(message, response)
+    try:
+        response = get_response('Hello. My name is ' + message.from_user.first_name)
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler(commands=['imagine'])
 def imagine(message):
-    response = openai.Image.create(
-        prompt=message.text,
-    n=1,
-    size="1024x1024"
-    )
-    image_url = response['data'][0]['url']
-    bot.send_photo(message.chat.id, image_url)
+    try:
+        response = openai.Image.create(
+            prompt=message.text,
+        n=1,
+        size="1024x1024"
+        )
+        image_url = response['data'][0]['url']
+        bot.send_photo(message.chat.id, image_url)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(content_types=['document'])
+def document_processing(message):
+    try:
+        file_info = bot.get_file(message.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        with open(os.path.join(script_dir,file_info.file_path), 'wb') as new_file:
+            new_file.write(downloaded_file)
+        filetext = textract.process(os.path.join(script_dir,file_info.file_path))
+        usermsg = str(message.caption) + "\nFile contents: " + str(filetext).replace('\n\n','\n')
+        response = get_response(usermsg)
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler(content_types=['voice'])
 def voice_processing(message):
-    file_info = bot.get_file(message.voice.file_id)
-    downloaded_file = bot.download_file(file_info.file_path)
-    filename = 'voice_' + str(message.from_user.id)
-    with open(os.path.join(script_dir,'voices',filename + '.ogg'), 'wb') as new_file:
-        new_file.write(downloaded_file)
-    ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
-    ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
-    transcript = openai.Audio.transcribe("whisper-1", open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
-    response = get_response(transcript)
-    bot.reply_to(message, response)
+    try:
+        file_info = bot.get_file(message.voice.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        filename = 'voice_' + str(message.from_user.id)
+        with open(os.path.join(script_dir,'voices',filename + '.ogg'), 'wb') as new_file:
+            new_file.write(downloaded_file)
+        ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
+        ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
+        transcript = openai.Audio.transcribe("whisper-1", open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
+        response = get_response(transcript)
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler()
 def catch_all(message):
-    response = get_response(message.text)
-    bot.reply_to(message, response)
+    try:
+        response = get_response(message.text)
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
 
 bot.infinity_polling()
