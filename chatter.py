@@ -57,6 +57,7 @@ async def setup(message):
 
 @bot.message_handler(commands=['imagine'])
 async def imagine(message):
+    print("Got image request:",message)
     try:
         response = openai.Image.create(
             prompt=message.text,
@@ -100,10 +101,18 @@ async def voice_processing(message):
 
 @bot.message_handler()
 async def catch_all(message):
-    try:
-        response = get_response(message.text)
-        await bot.reply_to(message, response)
-    except Exception as e:
-        await bot.reply_to(message, "Sorry, " + str(e))
+    if message.chat.type == 'private' or message.entities!=None:
+        try:
+            response = get_response(message.text)
+            await bot.reply_to(message, response)
+        except Exception as e:
+            await bot.reply_to(message, "Sorry, " + str(e))
+    else:
+        pass
 
+messages.append({'role':'system','content':'You are abdza_chatter_bot. A helpful and kind bot.'})
+response = openai.ChatCompletion.create(
+    model='gpt-3.5-turbo',
+    messages=messages
+)
 asyncio.run(bot.polling())
