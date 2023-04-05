@@ -71,8 +71,8 @@ async def imagine(message):
 @bot.message_handler(content_types=['document'])
 async def document_processing(message):
     try:
-        file_info = bot.get_file(message.document.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
+        file_info = await asyncio.wait_for(bot.get_file(message.document.file_id),timeout=60)
+        downloaded_file = await asyncio.wait_for(bot.download_file(file_info.file_path),timeout=60)
         with open(os.path.join(script_dir,file_info.file_path), 'wb') as new_file:
             new_file.write(downloaded_file)
         filetext = textract.process(os.path.join(script_dir,file_info.file_path))
@@ -85,15 +85,15 @@ async def document_processing(message):
 @bot.message_handler(content_types=['voice'])
 async def voice_processing(message):
     try:
-        file_info = bot.get_file(message.voice.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
+        file_info = await asyncio.wait_for(bot.get_file(message.voice.file_id),timeout=60)
+        downloaded_file = await asyncio.wait_for(bot.download_file(file_info.file_path),timeout=60)
         filename = 'voice_' + str(message.from_user.id)
         with open(os.path.join(script_dir,'voices',filename + '.ogg'), 'wb') as new_file:
             new_file.write(downloaded_file)
         ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
         ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
         transcript = openai.Audio.transcribe("whisper-1", open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
-        response = get_response(transcript)
+        response = get_response(transcript.text)
         await bot.reply_to(message, response)
     except Exception as e:
         await bot.reply_to(message, "Sorry, " + str(e))
