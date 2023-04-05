@@ -18,14 +18,33 @@ script_dir = os.path.dirname(script_path)
 messages = []
 
 def get_response(content):
-    messages.append({'role':'user','content':content})
-    response = openai.ChatCompletion.create(
-        model='gpt-3.5-turbo',
-        messages=messages
-    )
-    messages.append(response.choices[0].message)
-    return response.choices[0].message.content
+    try:
+        messages.append({'role':'user','content':content})
+        response = openai.ChatCompletion.create(
+            model='gpt-3.5-turbo',
+            messages=messages
+        )
+        messages.append(response.choices[0].message)
+        return response.choices[0].message.content
+    except Exception as e:
+        raise
 
+@bot.message_handler(commands=['reset'])
+def reset(message):
+    try:
+        messages.clear()
+        response = get_response('Hello. My name is ' + message.from_user.first_name)
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['length','size'])
+def msg_length(message):
+    try:
+        response = 'Message length: ' + str(len(messages)) + ' messages.'
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler(commands=['setup','start'])
 def setup(message):
