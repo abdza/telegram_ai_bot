@@ -22,12 +22,12 @@ To install the AI Chat Bot, follow these steps:
 
 Clone the repository:
 ```bash
-git clone https://github.com/abdza/ai_bot.git
+git clone https://github.com/abdza/telegram_ai_bot.git
 ```
 
 Change into the project directory:
 ```bash
-cd ai_bot
+cd telegram_ai_bot
 ```
 
 Create a virtual environment and activate it:
