@@ -22,7 +22,7 @@ def get_response(content):
     try:
         messages.append({'role':'user','content':content})
         response = openai.ChatCompletion.create(
-            model='gpt-3.5-turbo',
+            model='gpt-4',
             messages=messages
         )
         messages.append(response.choices[0].message)
@@ -112,7 +112,7 @@ def catch_all(message):
 
 messages.append({'role':'system','content':'You are abdza_chatter_bot. A helpful and kind bot.'})
 response = openai.ChatCompletion.create(
-    model='gpt-3.5-turbo',
+    model='gpt-4',
     messages=messages
 )
 bot.infinity_polling()
