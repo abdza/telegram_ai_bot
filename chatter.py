@@ -6,6 +6,7 @@ import openai
 import settings
 import os
 import textract
+import sqlite3
 from pydub import AudioSegment
 
 bot = telebot.TeleBot(settings.telebot_key)
@@ -16,16 +17,34 @@ script_path = os.path.abspath(__file__)
 # Get the directory containing the current script
 script_dir = os.path.dirname(script_path)
 
-messages = []
 
-def get_response(content):
+# messages = []
+
+def update_db():
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT)")
+    con.commit()
+    cursor.close()
+
+def get_response(message,content):
     try:
-        messages.append({'role':'user','content':content})
+        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+        cursor = con.cursor()
+        cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
+        con.commit()
+        messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
+        history = [{'role':'assistant','content':m[0]} if m[1]=='assistant' else {'role':'user','content':m[0]} for m in messages]
+
+        # messages.append({'role':'user','content':content})
         response = openai.ChatCompletion.create(
             model='gpt-4',
-            messages=messages
+            messages=history
         )
-        messages.append(response.choices[0].message)
+        cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response.choices[0].message.content))
+        con.commit()
+        cursor.close()
+        # messages.append(response.choices[0].message)
         return response.choices[0].message.content
     except Exception as e:
         raise
@@ -33,8 +52,12 @@ def get_response(content):
 @bot.message_handler(commands=['reset'])
 def reset(message):
     try:
-        messages.clear()
-        response = get_response('Hello. My name is ' + message.from_user.first_name)
+        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+        cursor = con.cursor()
+        cursor.execute("delete from chat where user=? and chat=?", (message.from_user.id, message.chat.id))
+        con.commit()
+        cursor.close()
+        response = get_response(message,'Hello. My name is ' + message.from_user.first_name)
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -42,7 +65,12 @@ def reset(message):
 @bot.message_handler(commands=['length','size'])
 def msg_length(message):
     try:
+        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+        cursor = con.cursor()
+        messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
         response = 'Message length: ' + str(len(messages)) + ' messages.'
+        con.commit()
+        cursor.close()
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -50,7 +78,7 @@ def msg_length(message):
 @bot.message_handler(commands=['setup','start'])
 def setup(message):
     try:
-        response = get_response('Hello. My name is ' + message.from_user.first_name)
+        response = get_response(message,'Hello. My name is ' + message.from_user.first_name)
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -78,7 +106,7 @@ def document_processing(message):
             new_file.write(downloaded_file)
         filetext = textract.process(os.path.join(script_dir,file_info.file_path))
         usermsg = str(message.caption) + "\nFile contents: " + str(filetext).replace('\n\n','\n')
-        response = get_response(usermsg)
+        response = get_response(message,usermsg)
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -94,7 +122,7 @@ def voice_processing(message):
         ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
         ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
         transcript = openai.Audio.transcribe("whisper-1", open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
-        response = get_response(transcript.text)
+        response = get_response(message,transcript.text)
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -103,16 +131,20 @@ def voice_processing(message):
 def catch_all(message):
     if message.chat.type == 'private' or message.entities!=None:
         try:
-            response = get_response(message.text)
+            response = get_response(message,message.text)
             bot.reply_to(message, response)
         except Exception as e:
             bot.reply_to(message, "Sorry, " + str(e))
     else:
         pass
 
-messages.append({'role':'system','content':'You are abdza_chatter_bot. A helpful and kind bot.'})
+
+update_db()
+tostart = []
+tostart.append({'role':'system','content':'You are abdza_chatter_bot. A helpful and kind bot.'})
 response = openai.ChatCompletion.create(
     model='gpt-4',
-    messages=messages
+    messages=tostart
 )
+
 bot.infinity_polling()
