@@ -4,8 +4,14 @@ import telebot
 import asyncio
 import openai
 import settings
+import math
 import os
 import textract
+from datetime import datetime, timedelta
+import yahooquery as yq
+import numpy as np
+import pandas as pd
+from sklearn.cluster import KMeans
 import sqlite3
 from pydub import AudioSegment
 
@@ -79,6 +85,113 @@ def msg_length(message):
 def setup(message):
     try:
         response = get_response(message,'Hello. My name is ' + message.from_user.first_name)
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['stock','ticker'])
+def stock(message):
+    try:
+        tokens = message.text.split(' ')
+        ticker = tokens[1].upper()
+        yqticker = yq.Ticker(ticker)
+        end_date = datetime.now()
+        days = 120
+        start_date = end_date - timedelta(days=days)
+        candles = yqticker.history(start=start_date,end=end_date,interval='1d')
+        
+        response = get_response(message,"Ticker " + ticker + " candles: " + str(candles))
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['levels'])
+def stock_levels(message):
+    try:
+        tokens = message.text.split(' ')
+        ticker = tokens[1].upper()
+        yqticker = yq.Ticker(ticker)
+        end_date = datetime.now()
+        days = 120
+        start_date = end_date - timedelta(days=days)
+        candles = yqticker.history(start=start_date,end=end_date,interval='1d')
+
+        response = "Levels:"
+        min = candles['low'].min()
+        max = candles['high'].max()
+        response += "\nStart: " + str(start_date)
+        response += "\nEnd: " + str(end_date)
+        response += "\nMin: " + str(min)
+        response += "\nMax: " + str(max)
+
+        datarange = max - min
+        gap = datarange / 200
+
+        datalen = len(candles)
+
+        kint = int(datalen/10)
+        highlevels = np.array(candles['high'])
+        kmeans = KMeans(n_clusters=kint).fit(highlevels.reshape(-1,1))
+        highclusters = kmeans.predict(highlevels.reshape(-1,1))
+
+        resistancelevels = {}
+
+        for cidx in range(datalen):
+            curcluster = highclusters[cidx]
+            if curcluster not in resistancelevels:
+                resistancelevels[curcluster] = 1
+            else:
+                resistancelevels[curcluster] += 1
+
+        donecluster = []
+        finalreslevels = {}
+        dresponse = ""
+        for cidx in range(datalen):
+            candle = candles.iloc[cidx]
+            curcluster = highclusters[cidx]
+            if resistancelevels[curcluster] > 2:
+                if curcluster not in donecluster:
+                    donecluster.append(curcluster)
+                    finalreslevels[curcluster] = {'level':candle['high'],'count':1}
+                else:
+                    finalreslevels[curcluster] = {'level':(finalreslevels[curcluster]['level'] + candle['high'])/2,'count':finalreslevels[curcluster]['count']+1}
+
+        response += "\n\nResistance levels:"
+        for lvl,clstr in sorted(finalreslevels.items(),key=lambda x: x[1]['level']):
+            response += "\n" + str(clstr['level']) + " : " + str(clstr['count'])
+
+        kint = int(datalen/10)
+        lowlevels = np.array(candles['low'])
+        kmeans = KMeans(n_clusters=kint).fit(lowlevels.reshape(-1,1))
+        lowclusters = kmeans.predict(lowlevels.reshape(-1,1))
+
+        supportlevels = {}
+
+        for cidx in range(datalen):
+            curcluster = lowclusters[cidx]
+            if curcluster not in supportlevels:
+                supportlevels[curcluster] = 1
+            else:
+                supportlevels[curcluster] += 1
+
+        donecluster = []
+        finalsuplevels = {}
+        dresponse = ""
+        for cidx in range(datalen):
+            candle = candles.iloc[cidx]
+            curcluster = lowclusters[cidx]
+            if supportlevels[curcluster] > 2:
+                if curcluster not in donecluster:
+                    donecluster.append(curcluster)
+                    finalsuplevels[curcluster] = {'level':candle['low'],'count':1}
+                else:
+                    finalsuplevels[curcluster] = {'level':(finalsuplevels[curcluster]['level'] + candle['low'])/2,'count':finalsuplevels[curcluster]['count']+1}
+
+        response += "\n\nSupport levels:"
+        for lvl,clstr in sorted(finalsuplevels.items(),key=lambda x: x[1]['level']):
+            response += "\n" + str(clstr['level']) + " : " + str(clstr['count'])
+        
+        response += "\n\n" + dresponse
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))

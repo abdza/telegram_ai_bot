@@ -3,3 +3,7 @@ requests
 openai
 pydub
 textract
+pandas
+numpy
+yahooquery
+scikit-learn
