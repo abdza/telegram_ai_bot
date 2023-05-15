@@ -7,6 +7,8 @@ import settings
 import math
 import os
 import textract
+import time
+import threading
 from datetime import datetime, timedelta
 import yahooquery as yq
 import numpy as np
@@ -22,6 +24,10 @@ script_path = os.path.abspath(__file__)
 
 # Get the directory containing the current script
 script_dir = os.path.dirname(script_path)
+
+sentinal = None
+stop_sentinal = False
+watched_tickers = []
 
 
 # messages = []
@@ -104,6 +110,44 @@ def stock(message):
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
+
+def watch_stock_thread(message):
+    global stop_sentinal, watched_tickers
+    tokens = message.text.split(' ')
+    ticker = tokens[1].upper()
+    if ticker in watched_tickers:
+        bot.reply_to(message, "Already watching " + ticker)
+    else:
+        watched_tickers.append(ticker)
+        bot.reply_to(message, "Watching " + ticker)
+    while not stop_sentinal:
+        # yqticker = yq.Ticker(ticker)
+        for tick in watched_tickers:
+            # bot.reply_to(message, "Ticker " + tick + " price: ")
+            print("Ticker " + tick + " price: ")
+        time.sleep(10)
+
+@bot.message_handler(commands=['watch'])
+def watch_stock(message):
+    try:
+        global sentinal, stop_sentinal, watched_tickers
+        tokens = message.text.split(' ')
+        if sentinal is None:
+            stop_sentinal = False
+            sentinal = threading.Thread(target=watch_stock_thread, args=(message,))
+            sentinal.start()
+            bot.reply_to(message, "Sentinal started watching")
+        else:
+            if len(tokens) > 1 and tokens[1].upper()!='STOP':
+                watch_stock_thread(message)
+            else:
+                stop_sentinal = True
+                #sentinal.join()
+                sentinal = None
+                watched_tickers = []
+                bot.reply_to(message, "Sentinal stopped watching")
+    except Exception as e:
+        print("Error: ",str(e))
 
 @bot.message_handler(commands=['levels'])
 def stock_levels(message):
