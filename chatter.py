@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import yahooquery as yq
 import numpy as np
 import pandas as pd
+from numerize import numerize
 from sklearn.cluster import KMeans
 import sqlite3
 from pydub import AudioSegment
@@ -156,24 +157,29 @@ def stock_levels(message):
         ticker = tokens[1].upper()
         yqticker = yq.Ticker(ticker)
         end_date = datetime.now()
-        days = 120
+        days = 200
         start_date = end_date - timedelta(days=days)
         candles = yqticker.history(start=start_date,end=end_date,interval='1d')
+        minute_start_date = end_date - timedelta(days=1)
+        minute_candles = yqticker.history(start=minute_start_date,end=end_date,interval='5m')
 
         response = "Levels:"
         min = candles['low'].min()
         max = candles['high'].max()
+        vol_avg = candles['volume'].mean()
+        min_vol_avg = minute_candles['volume'].mean()
         response += "\nStart: " + str(start_date)
         response += "\nEnd: " + str(end_date)
         response += "\nMin: " + str(min)
         response += "\nMax: " + str(max)
+        response += "\nVol Avg: " + str(numerize.numerize(vol_avg))
+        response += "\n5 Min Vol Avg: " + str(numerize.numerize(min_vol_avg))
 
         datarange = max - min
-        gap = datarange / 200
+        kint = int(datarange / 0.5)
 
         datalen = len(candles)
 
-        kint = int(datalen/10)
         highlevels = np.array(candles['high'])
         kmeans = KMeans(n_clusters=kint).fit(highlevels.reshape(-1,1))
         highclusters = kmeans.predict(highlevels.reshape(-1,1))
