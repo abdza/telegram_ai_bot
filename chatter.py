@@ -173,7 +173,8 @@ def stock_levels(message):
         response += "\nMin: " + str(min)
         response += "\nMax: " + str(max)
         response += "\nVol Avg: " + str(numerize.numerize(vol_avg))
-        response += "\n5 Min Vol Avg: " + str(numerize.numerize(min_vol_avg))
+        if int(min_vol_avg)>100:
+            response += "\n5 Min Vol Avg: " + str(numerize.numerize(min_vol_avg))
 
         datarange = max - min
         kint = int(datarange / 0.5)
