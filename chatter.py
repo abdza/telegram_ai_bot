@@ -152,7 +152,7 @@ def watch_stock(message):
 
 @bot.message_handler(commands=['levels'])
 def stock_levels(message):
-    try:
+    #try:
         tokens = message.text.split(' ')
         ticker = tokens[1].upper()
         yqticker = yq.Ticker(ticker)
@@ -173,7 +173,7 @@ def stock_levels(message):
         response += "\nMin: " + str(min)
         response += "\nMax: " + str(max)
         response += "\nVol Avg: " + str(numerize.numerize(vol_avg))
-        if int(min_vol_avg)>100:
+        if min_vol_avg!=None and not np.isnan(min_vol_avg) and int(min_vol_avg)>100:
             response += "\n5 Min Vol Avg: " + str(numerize.numerize(min_vol_avg))
 
         datarange = max - min
@@ -244,8 +244,8 @@ def stock_levels(message):
         
         response += "\n\n" + dresponse
         bot.reply_to(message, response)
-    except Exception as e:
-        bot.reply_to(message, "Sorry, " + str(e))
+    #except Exception as e:
+        #bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler(commands=['imagine'])
 def imagine(message):
