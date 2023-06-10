@@ -166,18 +166,24 @@ def stock_levels(message):
         response = "Levels:"
         min = candles['low'].min()
         max = candles['high'].max()
+        p_range = candles['high'] - candles['low']
+        range_avg = p_range.mean()
         vol_avg = candles['volume'].mean()
         min_vol_avg = minute_candles['volume'].mean()
         response += "\nStart: " + str(start_date)
         response += "\nEnd: " + str(end_date)
         response += "\nMin: " + str(min)
         response += "\nMax: " + str(max)
+        response += "\nRange Avg: " + str(numerize.numerize(range_avg))
         response += "\nVol Avg: " + str(numerize.numerize(vol_avg))
         if min_vol_avg!=None and not np.isnan(min_vol_avg) and int(min_vol_avg)>100:
             response += "\n5 Min Vol Avg: " + str(numerize.numerize(min_vol_avg))
 
         datarange = max - min
-        kint = int(datarange / 0.5)
+        if datarange < 50:
+            kint = int(datarange / 0.5)
+        else:
+            kint = int(datarange % 20)
 
         datalen = len(candles)
 
@@ -211,7 +217,10 @@ def stock_levels(message):
         for lvl,clstr in sorted(finalreslevels.items(),key=lambda x: x[1]['level']):
             response += "\n" + str(clstr['level']) + " : " + str(clstr['count'])
 
-        kint = int(datalen/10)
+        if datarange < 50:
+            kint = int(datarange / 0.5)
+        else:
+            kint = int(datarange % 20)
         lowlevels = np.array(candles['low'])
         kmeans = KMeans(n_clusters=kint).fit(lowlevels.reshape(-1,1))
         lowclusters = kmeans.predict(lowlevels.reshape(-1,1))
