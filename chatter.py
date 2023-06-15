@@ -7,7 +7,11 @@ import settings
 import math
 import os
 import textract
+import chromadb
+import threading
+from chromadb.config import Settings
 import time
+from uuid import uuid4
 import threading
 from datetime import datetime, timedelta
 import yahooquery as yq
@@ -30,46 +34,193 @@ sentinal = None
 stop_sentinal = False
 watched_tickers = []
 
-
 # messages = []
 
-def update_db():
-    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-    cursor = con.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT)")
-    con.commit()
-    cursor.close()
+def save_file(filepath, content):
+    with open(filepath, 'w', encoding='utf-8') as outfile:
+        outfile.write(content)
+
+
+def open_file(filepath):
+    with open(filepath, 'r', encoding='utf-8', errors='ignore') as infile:
+        return infile.read()
+
+conversation = list()
+# conversation.append({'role': 'system', 'content': open_file('system_default.txt')})
+conversation.append({'role': 'system', 'content': open_file('system_reflective_journaling.txt')})
+user_messages = list()
+all_messages = list()
+
+
+def chatbot(messages, model="gpt-4", temperature=0):
+    max_retry = 7
+    retry = 0
+    while True:
+        try:
+            response = openai.ChatCompletion.create(model=model, messages=messages, temperature=temperature)
+            text = response['choices'][0]['message']['content']
+            
+            ###    trim message object
+            if response['usage']['total_tokens'] >= 7000:
+                a = messages.pop(1)
+            
+            return text
+        except Exception as oops:
+            print(f'\n\nError communicating with OpenAI: "{oops}"')
+            if 'maximum context length' in str(oops):
+                a = messages.pop(1)
+                print('\n\n DEBUG: Trimming oldest message')
+                continue
+            retry += 1
+            if retry >= max_retry:
+                print(f"\n\nExiting due to excessive errors in API: {oops}")
+                exit(1)
+            print(f'\n\nRetrying in {2 ** (retry - 1) * 5} seconds...')
+            time.sleep(2 ** (retry - 1) * 5)
 
 def get_response(message,content):
-    try:
-        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-        cursor = con.cursor()
-        cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
-        con.commit()
-        messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
-        history = [{'role':'assistant','content':m[0]} if m[1]=='assistant' else {'role':'user','content':m[0]} for m in messages]
 
-        # messages.append({'role':'user','content':content})
-        response = openai.ChatCompletion.create(
-            model='gpt-4',
-            messages=history
-        )
-        cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response.choices[0].message.content))
-        con.commit()
-        cursor.close()
-        # messages.append(response.choices[0].message)
-        return response.choices[0].message.content
-    except Exception as e:
-        raise
+    persist_directory = "chromadb"
+    chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
+    collection = chroma_client.get_or_create_collection(name="knowledge_base")
+
+    text = content
+    user_messages.append(text)
+    all_messages.append('USER: %s' % text)
+    conversation.append({'role': 'user', 'content': text})
+
+    if len(all_messages) > 5:
+        all_messages.pop(0)
+    main_scratchpad = '\n\n'.join(all_messages).strip()
+
+    current_profile = open_file('user_profile.txt')
+    kb = 'No KB articles yet'
+    if collection.count() > 0:
+        results = collection.query(query_texts=[main_scratchpad], n_results=1)
+        kb = results['documents'][0][0]
+        print('\n\nDEBUG: Found results %s' % results)
+    # default_system = open_file('system_default.txt').replace('<<PROFILE>>', current_profile).replace('<<KB>>', kb)
+    default_system = open_file('system_reflective_journaling.txt').replace('<<PROFILE>>', current_profile).replace('<<KB>>', kb)
+    print('SYSTEM: %s' % default_system)
+    conversation[0]['content'] = default_system
+    print("\n==============================================================================================================\n")
+
+    response = chatbot(conversation)
+    conversation.append({'role': 'assistant', 'content': response})
+    all_messages.append('CHATBOT: %s' % response)
+    print('\n\nCHATBOT: %s' % response)
+    print("\n==============================================================================================================\n")
+
+    try:
+
+        if len(user_messages) > 3:
+            user_messages.pop(0)
+        user_scratchpad = '\n'.join(user_messages).strip()
+
+        print('\n\nUpdating user profile...')
+        profile_length = len(current_profile.split(' '))
+        profile_conversation = list()
+        profile_conversation.append({'role': 'system', 'content': open_file('system_update_user_profile.txt').replace('<<UPD>>', current_profile).replace('<<WORDS>>', str(profile_length))})
+        profile_conversation.append({'role': 'user', 'content': user_scratchpad})
+        profile = chatbot(profile_conversation)
+        save_file('user_profile.txt', profile)
+        print(profile)
+        print("\n==============================================================================================================\n")
+    except Exception as oops:
+        print("Caught error updating user profile: ",oops)
+
+
+    try:
+
+        if len(all_messages) > 5:
+            all_messages.pop(0)
+        main_scratchpad = '\n\n'.join(all_messages).strip()
+
+        print('\n\nUpdating KB...')
+        print(main_scratchpad)
+        print("\n==============================================================================================================\n")
+        if collection.count() == 0:
+            # yay first KB!
+            kb_convo = list()
+            kb_convo.append({'role': 'system', 'content': open_file('system_instantiate_new_kb.txt')})
+            kb_convo.append({'role': 'user', 'content': main_scratchpad})
+            article = chatbot(kb_convo)
+            new_id = str(uuid4())
+            collection.add(documents=[article],ids=[new_id])
+        else:
+            results = collection.query(query_texts=[main_scratchpad], n_results=1)
+            kb = results['documents'][0][0]
+            kb_id = results['ids'][0][0]
+            
+            # Expand current KB
+            kb_convo = list()
+            kb_convo.append({'role': 'system', 'content': open_file('system_update_existing_kb.txt').replace('<<KB>>', kb)})
+            kb_convo.append({'role': 'user', 'content': main_scratchpad})
+            article = chatbot(kb_convo)
+            print("\n\nKB Convo:\n")
+            print(kb_convo)
+            print("\nArticle:\n")
+            print(article)
+            print("\n==============================================================================================================\n")
+            collection.update(ids=[kb_id],documents=[article])
+            
+            # Split KB if too large
+            kb_len = len(article.split(' '))
+            if kb_len > 1000:
+                print("KB article too big. Splitting in two")
+                kb_convo = list()
+                kb_convo.append({'role': 'system', 'content': open_file('system_split_kb.txt')})
+                kb_convo.append({'role': 'user', 'content': article})
+                articles = chatbot(kb_convo).split('ARTICLE 2:')
+                a1 = articles[0].replace('ARTICLE 1:', '').strip()
+                a2 = articles[1].strip()
+                collection.update(ids=[kb_id],documents=[a1])
+                new_id = str(uuid4())
+                collection.add(documents=[a2],ids=[new_id])
+    except Exception as oops:
+        print("Caught error updating KB:",oops)
+    
+    try:
+        chroma_client.persist()
+    except Exception as oops:
+        print("Caught error persisting Chromadb:",oops)
+
+    return response
+
+    # try:
+    #     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    #     cursor = con.cursor()
+    #     cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
+    #     con.commit()
+    #     messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
+    #     history = [{'role':'assistant','content':m[0]} if m[1]=='assistant' else {'role':'user','content':m[0]} for m in messages]
+    #
+    #     # messages.append({'role':'user','content':content})
+    #     response = openai.ChatCompletion.create(
+    #         model='gpt-4',
+    #         messages=history
+    #     )
+    #     cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response.choices[0].message.content))
+    #     con.commit()
+    #     cursor.close()
+    #     # messages.append(response.choices[0].message)
+    #     return response.choices[0].message.content
+    # except Exception as e:
+    #     raise
 
 @bot.message_handler(commands=['reset'])
 def reset(message):
     try:
-        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-        cursor = con.cursor()
-        cursor.execute("delete from chat where user=? and chat=?", (message.from_user.id, message.chat.id))
-        con.commit()
-        cursor.close()
+        # con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+        # cursor = con.cursor()
+        # cursor.execute("delete from chat where user=? and chat=?", (message.from_user.id, message.chat.id))
+        # con.commit()
+        # cursor.close()
+        conversation.clear()
+# conversation.append({'role': 'system', 'content': open_file('system_default.txt')})
+        conversation.append({'role': 'system', 'content': open_file('system_reflective_journaling.txt')})
+        user_messages.clear()
+        all_messages.clear()
         response = get_response(message,'Hello. My name is ' + message.from_user.first_name)
         bot.reply_to(message, response)
     except Exception as e:
@@ -78,12 +229,12 @@ def reset(message):
 @bot.message_handler(commands=['length','size'])
 def msg_length(message):
     try:
-        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-        cursor = con.cursor()
-        messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
-        response = 'Message length: ' + str(len(messages)) + ' messages.'
-        con.commit()
-        cursor.close()
+        # con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+        # cursor = con.cursor()
+        # messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
+        response = 'Message length: ' + str(len(all_messages)) + ' messages.'
+        # con.commit()
+        # cursor.close()
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -312,12 +463,12 @@ def catch_all(message):
         pass
 
 
-update_db()
-tostart = []
-tostart.append({'role':'system','content':'You are abdza_chatter_bot. A helpful and kind bot.'})
-response = openai.ChatCompletion.create(
-    model='gpt-4',
-    messages=tostart
-)
+# update_db()
+# tostart = []
+# tostart.append({'role':'system','content':'You are abdza_chatter_bot. A helpful and kind bot.'})
+# response = openai.ChatCompletion.create(
+#     model='gpt-4',
+#     messages=tostart
+# )
 
 bot.infinity_polling()
