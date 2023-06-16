@@ -29,6 +29,7 @@ script_path = os.path.abspath(__file__)
 
 # Get the directory containing the current script
 script_dir = os.path.dirname(script_path)
+chromadb_dir = os.path.join(script_dir,'chromadb')
 
 sentinal = None
 stop_sentinal = False
@@ -83,7 +84,7 @@ def chatbot(messages, model="gpt-4", temperature=0):
 def get_response(message,content):
 
     tic = time.perf_counter()
-    persist_directory = "chromadb"
+    persist_directory = chromadb_dir
     chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
     collection = chroma_client.get_or_create_collection(name="knowledge_base")
     toc = time.perf_counter()
