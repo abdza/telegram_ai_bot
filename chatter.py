@@ -43,7 +43,8 @@ def save_file(filepath, content):
 
 
 def open_file(filepath):
-    with open(filepath, 'r', encoding='utf-8', errors='ignore') as infile:
+    finalfilepath = os.path.join(script_dir,filepath)
+    with open(finalfilepath, 'r', encoding='utf-8', errors='ignore') as infile:
         return infile.read()
 
 default_system_text = 'system_reflective_journaling.txt'
