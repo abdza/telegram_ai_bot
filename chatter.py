@@ -45,11 +45,13 @@ def open_file(filepath):
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as infile:
         return infile.read()
 
+default_system_text = 'system_reflective_journaling.txt'
 conversation = list()
 # conversation.append({'role': 'system', 'content': open_file('system_default.txt')})
-conversation.append({'role': 'system', 'content': open_file('system_reflective_journaling.txt')})
+conversation.append({'role': 'system', 'content': open_file(default_system_text)})
 user_messages = list()
 all_messages = list()
+
 
 
 def chatbot(messages, model="gpt-4", temperature=0):
@@ -80,9 +82,13 @@ def chatbot(messages, model="gpt-4", temperature=0):
 
 def get_response(message,content):
 
+    tic = time.perf_counter()
     persist_directory = "chromadb"
     chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
     collection = chroma_client.get_or_create_collection(name="knowledge_base")
+    toc = time.perf_counter()
+    print(f"Setup chroma in {toc - tic:0.4f} seconds")
+    print("\n\nKB Collection Amount:",collection.count())
 
     text = content
     user_messages.append(text)
@@ -96,39 +102,44 @@ def get_response(message,content):
     current_profile = open_file('user_profile.txt')
     kb = 'No KB articles yet'
     if collection.count() > 0:
-        results = collection.query(query_texts=[main_scratchpad], n_results=1)
+        tic = time.perf_counter()
+        results = collection.query(query_texts=[content], n_results=1)
         kb = results['documents'][0][0]
         print('\n\nDEBUG: Found results %s' % results)
+        toc = time.perf_counter()
+        print(f"Chroma query in {toc - tic:0.4f} seconds")
     # default_system = open_file('system_default.txt').replace('<<PROFILE>>', current_profile).replace('<<KB>>', kb)
-    default_system = open_file('system_reflective_journaling.txt').replace('<<PROFILE>>', current_profile).replace('<<KB>>', kb)
+    tic = time.perf_counter()
+    default_system = open_file(default_system_text).replace('<<KB>>', kb)
     print('SYSTEM: %s' % default_system)
     conversation[0]['content'] = default_system
     print("\n==============================================================================================================\n")
 
     response = chatbot(conversation)
+    toc = time.perf_counter()
+    print(f"Got response in {toc - tic:0.4f} seconds")
     conversation.append({'role': 'assistant', 'content': response})
     all_messages.append('CHATBOT: %s' % response)
     print('\n\nCHATBOT: %s' % response)
     print("\n==============================================================================================================\n")
 
-    try:
-
-        if len(user_messages) > 3:
-            user_messages.pop(0)
-        user_scratchpad = '\n'.join(user_messages).strip()
-
-        print('\n\nUpdating user profile...')
-        profile_length = len(current_profile.split(' '))
-        profile_conversation = list()
-        profile_conversation.append({'role': 'system', 'content': open_file('system_update_user_profile.txt').replace('<<UPD>>', current_profile).replace('<<WORDS>>', str(profile_length))})
-        profile_conversation.append({'role': 'user', 'content': user_scratchpad})
-        profile = chatbot(profile_conversation)
-        save_file('user_profile.txt', profile)
-        print(profile)
-        print("\n==============================================================================================================\n")
-    except Exception as oops:
-        print("Caught error updating user profile: ",oops)
-
+    # try:
+    #
+    #     if len(user_messages) > 3:
+    #         user_messages.pop(0)
+    #     user_scratchpad = '\n'.join(user_messages).strip()
+    #
+    #     print('\n\nUpdating user profile...')
+    #     profile_length = len(current_profile.split(' '))
+    #     profile_conversation = list()
+    #     profile_conversation.append({'role': 'system', 'content': open_file('system_update_user_profile.txt').replace('<<UPD>>', current_profile).replace('<<WORDS>>', str(profile_length))})
+    #     profile_conversation.append({'role': 'user', 'content': user_scratchpad})
+    #     profile = chatbot(profile_conversation)
+    #     save_file('user_profile.txt', profile)
+    #     print(profile)
+    #     print("\n==============================================================================================================\n")
+    # except Exception as oops:
+    #     print("Caught error updating user profile: ",oops)
 
     try:
 
@@ -141,33 +152,46 @@ def get_response(message,content):
         print("\n==============================================================================================================\n")
         if collection.count() == 0:
             # yay first KB!
+            tic = time.perf_counter()
             kb_convo = list()
             kb_convo.append({'role': 'system', 'content': open_file('system_instantiate_new_kb.txt')})
             kb_convo.append({'role': 'user', 'content': main_scratchpad})
             article = chatbot(kb_convo)
             new_id = str(uuid4())
             collection.add(documents=[article],ids=[new_id])
+            toc = time.perf_counter()
+            print(f"Chroma added in {toc - tic:0.4f} seconds")
         else:
-            results = collection.query(query_texts=[main_scratchpad], n_results=1)
+            tic = time.perf_counter()
+            results = collection.query(query_texts=[content], n_results=1)
+            toc = time.perf_counter()
+            print(f"Chroma done query in {toc - tic:0.4f} seconds")
             kb = results['documents'][0][0]
             kb_id = results['ids'][0][0]
             
             # Expand current KB
+            tic = time.perf_counter()
             kb_convo = list()
             kb_convo.append({'role': 'system', 'content': open_file('system_update_existing_kb.txt').replace('<<KB>>', kb)})
             kb_convo.append({'role': 'user', 'content': main_scratchpad})
             article = chatbot(kb_convo)
+            toc = time.perf_counter()
+            print(f"Preparing kb in {toc - tic:0.4f} seconds")
+            tic = time.perf_counter()
             print("\n\nKB Convo:\n")
             print(kb_convo)
             print("\nArticle:\n")
             print(article)
             print("\n==============================================================================================================\n")
             collection.update(ids=[kb_id],documents=[article])
+            toc = time.perf_counter()
+            print(f"Chroma done update in {toc - tic:0.4f} seconds")
             
             # Split KB if too large
             kb_len = len(article.split(' '))
             if kb_len > 1000:
                 print("KB article too big. Splitting in two")
+                tic = time.perf_counter()
                 kb_convo = list()
                 kb_convo.append({'role': 'system', 'content': open_file('system_split_kb.txt')})
                 kb_convo.append({'role': 'user', 'content': article})
@@ -175,13 +199,21 @@ def get_response(message,content):
                 a1 = articles[0].replace('ARTICLE 1:', '').strip()
                 a2 = articles[1].strip()
                 collection.update(ids=[kb_id],documents=[a1])
+                toc = time.perf_counter()
+                print(f"Chroma updated in {toc - tic:0.4f} seconds")
+                tic = time.perf_counter()
                 new_id = str(uuid4())
                 collection.add(documents=[a2],ids=[new_id])
+                toc = time.perf_counter()
+                print(f"Chroma other half added in {toc - tic:0.4f} seconds")
     except Exception as oops:
         print("Caught error updating KB:",oops)
     
     try:
+        tic = time.perf_counter()
         chroma_client.persist()
+        toc = time.perf_counter()
+        print(f"Chroma done persist in {toc - tic:0.4f} seconds")
     except Exception as oops:
         print("Caught error persisting Chromadb:",oops)
 
@@ -218,7 +250,7 @@ def reset(message):
         # cursor.close()
         conversation.clear()
 # conversation.append({'role': 'system', 'content': open_file('system_default.txt')})
-        conversation.append({'role': 'system', 'content': open_file('system_reflective_journaling.txt')})
+        conversation.append({'role': 'system', 'content': open_file(default_system_text)})
         user_messages.clear()
         all_messages.clear()
         response = get_response(message,'Hello. My name is ' + message.from_user.first_name)
@@ -471,4 +503,4 @@ def catch_all(message):
 #     messages=tostart
 # )
 
-bot.infinity_polling()
+bot.infinity_polling(timeout=60,long_polling_timeout=60)
