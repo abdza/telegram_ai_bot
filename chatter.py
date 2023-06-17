@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
 import telebot
-import asyncio
 import openai
 import settings
-import math
 import os
 import textract
 import chromadb
@@ -16,10 +14,8 @@ import threading
 from datetime import datetime, timedelta
 import yahooquery as yq
 import numpy as np
-import pandas as pd
 from numerize import numerize
 from sklearn.cluster import KMeans
-import sqlite3
 from pydub import AudioSegment
 
 bot = telebot.TeleBot(settings.telebot_key)
@@ -35,12 +31,9 @@ sentinal = None
 stop_sentinal = False
 watched_tickers = []
 
-# messages = []
-
 def save_file(filepath, content):
     with open(filepath, 'w', encoding='utf-8') as outfile:
         outfile.write(content)
-
 
 def open_file(filepath):
     finalfilepath = os.path.join(script_dir,filepath)
@@ -49,12 +42,9 @@ def open_file(filepath):
 
 default_system_text = 'system_reflective_journaling.txt'
 conversation = list()
-# conversation.append({'role': 'system', 'content': open_file('system_default.txt')})
 conversation.append({'role': 'system', 'content': open_file(default_system_text)})
 user_messages = list()
 all_messages = list()
-
-
 
 def chatbot(messages, model="gpt-4", temperature=0):
     max_retry = 7
@@ -87,12 +77,14 @@ def get_response(message,content):
     tic = time.perf_counter()
     persist_directory = chromadb_dir
     chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
-    collection = chroma_client.get_or_create_collection(name="knowledge_base")
+    print("User Id:", message.from_user.id)
+    print("Chat Id:", message.chat.id)
+    collection = chroma_client.get_or_create_collection(name="knowledge_base_" + str(message.from_user.id))
     toc = time.perf_counter()
     print(f"Setup chroma in {toc - tic:0.4f} seconds")
     print("\n\nKB Collection Amount:",collection.count())
 
-    text = content
+    text = content + "\n\nTimestamp: " + str(datetime.now())
     user_messages.append(text)
     all_messages.append('USER: %s' % text)
     conversation.append({'role': 'user', 'content': text})
@@ -101,7 +93,6 @@ def get_response(message,content):
         all_messages.pop(0)
     main_scratchpad = '\n\n'.join(all_messages).strip()
 
-    current_profile = open_file('user_profile.txt')
     kb = 'No KB articles yet'
     if collection.count() > 0:
         tic = time.perf_counter()
@@ -110,7 +101,6 @@ def get_response(message,content):
         print('\n\nDEBUG: Found results %s' % results)
         toc = time.perf_counter()
         print(f"Chroma query in {toc - tic:0.4f} seconds")
-    # default_system = open_file('system_default.txt').replace('<<PROFILE>>', current_profile).replace('<<KB>>', kb)
     tic = time.perf_counter()
     default_system = open_file(default_system_text).replace('<<KB>>', kb)
     print('SYSTEM: %s' % default_system)
@@ -124,24 +114,6 @@ def get_response(message,content):
     all_messages.append('CHATBOT: %s' % response)
     print('\n\nCHATBOT: %s' % response)
     print("\n==============================================================================================================\n")
-
-    # try:
-    #
-    #     if len(user_messages) > 3:
-    #         user_messages.pop(0)
-    #     user_scratchpad = '\n'.join(user_messages).strip()
-    #
-    #     print('\n\nUpdating user profile...')
-    #     profile_length = len(current_profile.split(' '))
-    #     profile_conversation = list()
-    #     profile_conversation.append({'role': 'system', 'content': open_file('system_update_user_profile.txt').replace('<<UPD>>', current_profile).replace('<<WORDS>>', str(profile_length))})
-    #     profile_conversation.append({'role': 'user', 'content': user_scratchpad})
-    #     profile = chatbot(profile_conversation)
-    #     save_file('user_profile.txt', profile)
-    #     print(profile)
-    #     print("\n==============================================================================================================\n")
-    # except Exception as oops:
-    #     print("Caught error updating user profile: ",oops)
 
     try:
 
@@ -221,37 +193,10 @@ def get_response(message,content):
 
     return response
 
-    # try:
-    #     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-    #     cursor = con.cursor()
-    #     cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
-    #     con.commit()
-    #     messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
-    #     history = [{'role':'assistant','content':m[0]} if m[1]=='assistant' else {'role':'user','content':m[0]} for m in messages]
-    #
-    #     # messages.append({'role':'user','content':content})
-    #     response = openai.ChatCompletion.create(
-    #         model='gpt-4',
-    #         messages=history
-    #     )
-    #     cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response.choices[0].message.content))
-    #     con.commit()
-    #     cursor.close()
-    #     # messages.append(response.choices[0].message)
-    #     return response.choices[0].message.content
-    # except Exception as e:
-    #     raise
-
 @bot.message_handler(commands=['reset'])
 def reset(message):
     try:
-        # con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-        # cursor = con.cursor()
-        # cursor.execute("delete from chat where user=? and chat=?", (message.from_user.id, message.chat.id))
-        # con.commit()
-        # cursor.close()
         conversation.clear()
-# conversation.append({'role': 'system', 'content': open_file('system_default.txt')})
         conversation.append({'role': 'system', 'content': open_file(default_system_text)})
         user_messages.clear()
         all_messages.clear()
@@ -263,12 +208,7 @@ def reset(message):
 @bot.message_handler(commands=['length','size'])
 def msg_length(message):
     try:
-        # con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-        # cursor = con.cursor()
-        # messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
         response = 'Message length: ' + str(len(all_messages)) + ' messages.'
-        # con.commit()
-        # cursor.close()
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -307,9 +247,7 @@ def watch_stock_thread(message):
         watched_tickers.append(ticker)
         bot.reply_to(message, "Watching " + ticker)
     while not stop_sentinal:
-        # yqticker = yq.Ticker(ticker)
         for tick in watched_tickers:
-            # bot.reply_to(message, "Ticker " + tick + " price: ")
             print("Ticker " + tick + " price: ")
         time.sleep(10)
 
@@ -328,7 +266,6 @@ def watch_stock(message):
                 watch_stock_thread(message)
             else:
                 stop_sentinal = True
-                #sentinal.join()
                 sentinal = None
                 watched_tickers = []
                 bot.reply_to(message, "Sentinal stopped watching")
@@ -495,14 +432,5 @@ def catch_all(message):
             bot.reply_to(message, "Sorry, " + str(e))
     else:
         pass
-
-
-# update_db()
-# tostart = []
-# tostart.append({'role':'system','content':'You are abdza_chatter_bot. A helpful and kind bot.'})
-# response = openai.ChatCompletion.create(
-#     model='gpt-4',
-#     messages=tostart
-# )
 
 bot.infinity_polling(timeout=60,long_polling_timeout=60)
