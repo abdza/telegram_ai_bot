@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from re import template
 import telebot
 import openai
 import settings
@@ -8,10 +7,12 @@ import os
 import textract
 import chromadb
 import threading
+# from re import template
+# from urlextract import URLExtract
+# import urllib
 from chromadb.config import Settings
 import time
 from uuid import uuid4
-import threading
 import sqlite3
 from datetime import datetime, timedelta
 import yahooquery as yq
@@ -46,30 +47,13 @@ def open_file(filepath):
         return infile.read()
 
 # default_system_text = 'system_reflective_journaling.txt'
-default_system_text = 'system_ai_friend.txt'
-conversation = list()
-conversation.append({'role': 'system', 'content': open_file(default_system_text)})
-user_messages = list()
-all_messages = list()
 
 def update_db():
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT)")
     con.commit()
-
-    messages = cursor.execute("SELECT role,timestamp,message FROM chat ORDER BY timestamp asc limit 50").fetchall()
-
-    for m in messages:
-        m_text = m[2]
-        if m[0]=='user':
-            user_messages.append(m_text)
-            all_messages.append('USER: %s' % m_text)
-            conversation.append({'role': 'user', 'content': m_text})
-        else:
-            conversation.append({'role': 'assistant', 'content': m_text})
-            all_messages.append('CHATBOT: %s' % m_text)
-    cursor.close()
+    con.close()
 
 
 def chatbot(messages, model=chat_model, temperature=0.0):
@@ -98,59 +82,7 @@ def chatbot(messages, model=chat_model, temperature=0.0):
             print(f'\n\nRetrying in {2 ** (retry - 1) * 5} seconds...')
             time.sleep(2 ** (retry - 1) * 5)
 
-def get_response(message,content):
-
-    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
-    cursor = con.cursor()
-    #tic = time.perf_counter()
-    persist_directory = chromadb_dir
-    chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
-    print("User Id:", message.from_user.id)
-    print("Chat Id:", message.chat.id)
-    collection_name = "knowledge_base_" + str(message.from_user.id)
-    print("Collection name: ",collection_name)
-    collection = chroma_client.get_or_create_collection(name=collection_name)
-    #toc = time.perf_counter()
-    # print(f"Setup chroma in {#toc - tic:0.4f} seconds")
-    # print("\n\nKB Collection Amount:",collection.count())
-
-    text = content + "\n\nTimestamp: " + str(datetime.now())
-    user_messages.append(text)
-    all_messages.append('USER: %s' % text)
-    conversation.append({'role': 'user', 'content': text})
-
-    if len(all_messages) > 50:
-        all_messages.pop(0)
-    main_scratchpad = '\n\n'.join(all_messages).strip()
-
-    kb = 'No KB articles yet'
-    if collection.count() > 0:
-        #tic = time.perf_counter()
-        results = collection.query(query_texts=[content], n_results=1)
-        kb = results['documents'][0][0]
-        # print('\n\nDEBUG: Found results %s' % results)
-        #toc = time.perf_counter()
-        # print(f"Chroma query in {#toc - tic:0.4f} seconds")
-    #tic = time.perf_counter()
-    default_system = open_file(default_system_text).replace('<<KB>>', kb)
-    # print('SYSTEM: %s' % default_system)
-    conversation[0]['content'] = default_system
-    # print("\n==============================================================================================================\n")
-
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
-    con.commit()
-    response = chatbot(conversation,temperature=0.8)
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response))
-    con.commit()
-    cursor.close()
-    print("Raw response:",response)
-    #toc = time.perf_counter()
-    # print(f"Got response in {#toc - tic:0.4f} seconds")
-    conversation.append({'role': 'assistant', 'content': response})
-    all_messages.append('CHATBOT: %s' % response)
-    # print('\n\nCHATBOT: %s' % response)
-    # print("\n==============================================================================================================\n")
-
+def update_kb(content, chroma_client, collection, all_messages):
     try:
 
         if len(all_messages) > 50:
@@ -229,15 +161,101 @@ def get_response(message,content):
     except Exception as oops:
         print("Caught error persisting Chromadb:",oops)
 
+def get_response(message,content):
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
+
+    default_system_text = 'system_ai_friend.txt'
+    conversation = list()
+    conversation.append({'role': 'system', 'content': open_file(default_system_text)})
+    user_messages = list()
+    all_messages = list()
+
+    messages = cursor.execute("SELECT role,timestamp,message FROM chat where user = ? ORDER BY timestamp asc limit 50",(message.from_user.id,)).fetchall()
+
+    for m in messages:
+        m_text = m[2]
+        if m[0]=='user':
+            user_messages.append(m_text)
+            all_messages.append('USER: %s' % m_text)
+            conversation.append({'role': 'user', 'content': m_text})
+        else:
+            conversation.append({'role': 'assistant', 'content': m_text})
+            all_messages.append('CHATBOT: %s' % m_text)
+
+    #tic = time.perf_counter()
+    persist_directory = chromadb_dir
+    chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
+    print("User Id:", message.from_user.id)
+    print("Chat Id:", message.chat.id)
+    collection_name = "knowledge_base_" + str(message.from_user.id)
+    print("Collection name: ",collection_name)
+    collection = chroma_client.get_or_create_collection(name=collection_name)
+    #toc = time.perf_counter()
+    # print(f"Setup chroma in {#toc - tic:0.4f} seconds")
+    # print("\n\nKB Collection Amount:",collection.count())
+
+    # extractor = URLExtract()
+    # urls = extractor.find_urls(content)
+    # for url in urls:
+    #     try:
+    #         pagecontent = urllib.request.urlopen(url).read()
+    #         content += "\n\nContent for " + url + " is:" + str(pagecontent) + "\n\n"
+    #     except Exception as oops:
+    #         print("Caught error browsing: ",url," with error msg:",oops)
+    #
+    # print("Current content:",content)
+
+    text = content + "\n\nTimestamp: " + str(datetime.now())
+    user_messages.append(text)
+    all_messages.append('USER: %s' % text)
+    conversation.append({'role': 'user', 'content': text})
+
+    if len(all_messages) > 50:
+        all_messages.pop(0)
+    main_scratchpad = '\n\n'.join(all_messages).strip()
+
+    kb = 'No KB articles yet'
+    if collection.count() > 0:
+        #tic = time.perf_counter()
+        results = collection.query(query_texts=[content], n_results=1)
+        kb = results['documents'][0][0]
+        # print('\n\nDEBUG: Found results %s' % results)
+        #toc = time.perf_counter()
+        # print(f"Chroma query in {#toc - tic:0.4f} seconds")
+    #tic = time.perf_counter()
+    default_system = open_file(default_system_text).replace('<<KB>>', kb)
+    # print('SYSTEM: %s' % default_system)
+    conversation[0]['content'] = default_system
+    # print("\n==============================================================================================================\n")
+
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
+    response = chatbot(conversation,temperature=0.8)
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response))
+    con.commit()
+    con.close()
+    print("Raw response:",response)
+    #toc = time.perf_counter()
+    # print(f"Got response in {#toc - tic:0.4f} seconds")
+    conversation.append({'role': 'assistant', 'content': response})
+    all_messages.append('CHATBOT: %s' % response)
+    # print('\n\nCHATBOT: %s' % response)
+    # print("\n==============================================================================================================\n")
+
+    # update_kb(content, chroma_client, collection, all_messages):
+    kb_updater = threading.Thread(target=update_kb, args=(content, chroma_client, collection, all_messages))
+    kb_updater.start()
+
     return response
 
 @bot.message_handler(commands=['reset'])
 def reset(message):
     try:
-        conversation.clear()
-        conversation.append({'role': 'system', 'content': open_file(default_system_text)})
-        user_messages.clear()
-        all_messages.clear()
+        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+        cursor = con.cursor()
+        cursor.execute("delete from chat where user = ?",(message.from_user.id,))
+        con.commit()
+        con.close()
         response = get_response(message,'Hello. My name is ' + message.from_user.first_name)
         bot.reply_to(message, response)
     except Exception as e:
@@ -246,7 +264,11 @@ def reset(message):
 @bot.message_handler(commands=['length','size'])
 def msg_length(message):
     try:
-        response = 'Message length: ' + str(len(all_messages)) + ' messages.'
+        con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+        cursor = con.cursor()
+        messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
+        response = 'Message length: ' + str(len(messages)) + ' messages.'
+        con.close()
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
@@ -487,4 +509,4 @@ def catch_all(message):
         pass
 
 update_db()
-bot.infinity_polling(timeout=60,long_polling_timeout=60)
+bot.infinity_polling(timeout=100,long_polling_timeout=100)
