@@ -12,6 +12,7 @@ from chromadb.config import Settings
 import time
 from uuid import uuid4
 import threading
+import sqlite3
 from datetime import datetime, timedelta
 import yahooquery as yq
 import numpy as np
@@ -34,6 +35,7 @@ chat_model = "gpt-4"
 # chat_model = "gpt-3.5-turbo"
 watched_tickers = []
 
+
 def save_file(filepath, content):
     with open(filepath, 'w', encoding='utf-8') as outfile:
         outfile.write(content)
@@ -49,6 +51,26 @@ conversation = list()
 conversation.append({'role': 'system', 'content': open_file(default_system_text)})
 user_messages = list()
 all_messages = list()
+
+def update_db():
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT)")
+    con.commit()
+
+    messages = cursor.execute("SELECT role,timestamp,message FROM chat ORDER BY timestamp asc limit 100").fetchall()
+
+    for m in messages:
+        m_text = m[2] + '\n\nTimestamp :' + str(m[1])
+        if m[0]=='user':
+            user_messages.append(m_text)
+            all_messages.append('USER: %s' % m_text)
+            conversation.append({'role': 'user', 'content': m_text})
+        else:
+            conversation.append({'role': 'assistant', 'content': m_text})
+            all_messages.append('CHATBOT: %s' % m_text)
+    cursor.close()
+
 
 def chatbot(messages, model=chat_model, temperature=0.0):
     max_retry = 7
@@ -78,6 +100,8 @@ def chatbot(messages, model=chat_model, temperature=0.0):
 
 def get_response(message,content):
 
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
     tic = time.perf_counter()
     persist_directory = chromadb_dir
     chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
@@ -113,7 +137,12 @@ def get_response(message,content):
     conversation[0]['content'] = default_system
     # print("\n==============================================================================================================\n")
 
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
+    con.commit()
     response = chatbot(conversation,temperature=0.8)
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response))
+    con.commit()
+    cursor.close()
     print("Raw response:",response)
     toc = time.perf_counter()
     # print(f"Got response in {toc - tic:0.4f} seconds")
@@ -457,4 +486,5 @@ def catch_all(message):
     else:
         pass
 
+update_db()
 bot.infinity_polling(timeout=60,long_polling_timeout=60)
