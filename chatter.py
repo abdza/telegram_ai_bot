@@ -184,8 +184,7 @@ def get_response(message,content):
             all_messages.append('CHATBOT: %s' % m_text)
 
     #tic = time.perf_counter()
-    persist_directory = chromadb_dir
-    chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
+    chroma_client = chromadb.Client(Settings(persist_directory=chromadb_dir,chroma_db_impl="duckdb+parquet",))
     print("User Id:", message.from_user.id)
     print("Chat Id:", message.chat.id)
     collection_name = "knowledge_base_" + str(message.from_user.id)
