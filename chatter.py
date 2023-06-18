@@ -58,7 +58,7 @@ def update_db():
     cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT)")
     con.commit()
 
-    messages = cursor.execute("SELECT role,timestamp,message FROM chat ORDER BY timestamp asc limit 100").fetchall()
+    messages = cursor.execute("SELECT role,timestamp,message FROM chat ORDER BY timestamp asc limit 50").fetchall()
 
     for m in messages:
         m_text = m[2] + '\n\nTimestamp :' + str(m[1])
@@ -102,7 +102,7 @@ def get_response(message,content):
 
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
-    tic = time.perf_counter()
+    #tic = time.perf_counter()
     persist_directory = chromadb_dir
     chroma_client = chromadb.Client(Settings(persist_directory=persist_directory,chroma_db_impl="duckdb+parquet",))
     print("User Id:", message.from_user.id)
@@ -110,8 +110,8 @@ def get_response(message,content):
     collection_name = "knowledge_base_" + str(message.from_user.id)
     print("Collection name: ",collection_name)
     collection = chroma_client.get_or_create_collection(name=collection_name)
-    toc = time.perf_counter()
-    # print(f"Setup chroma in {toc - tic:0.4f} seconds")
+    #toc = time.perf_counter()
+    # print(f"Setup chroma in {#toc - tic:0.4f} seconds")
     # print("\n\nKB Collection Amount:",collection.count())
 
     text = content + "\n\nTimestamp: " + str(datetime.now())
@@ -119,19 +119,19 @@ def get_response(message,content):
     all_messages.append('USER: %s' % text)
     conversation.append({'role': 'user', 'content': text})
 
-    if len(all_messages) > 5:
+    if len(all_messages) > 50:
         all_messages.pop(0)
     main_scratchpad = '\n\n'.join(all_messages).strip()
 
     kb = 'No KB articles yet'
     if collection.count() > 0:
-        tic = time.perf_counter()
+        #tic = time.perf_counter()
         results = collection.query(query_texts=[content], n_results=1)
         kb = results['documents'][0][0]
         # print('\n\nDEBUG: Found results %s' % results)
-        toc = time.perf_counter()
-        # print(f"Chroma query in {toc - tic:0.4f} seconds")
-    tic = time.perf_counter()
+        #toc = time.perf_counter()
+        # print(f"Chroma query in {#toc - tic:0.4f} seconds")
+    #tic = time.perf_counter()
     default_system = open_file(default_system_text).replace('<<KB>>', kb)
     # print('SYSTEM: %s' % default_system)
     conversation[0]['content'] = default_system
@@ -144,8 +144,8 @@ def get_response(message,content):
     con.commit()
     cursor.close()
     print("Raw response:",response)
-    toc = time.perf_counter()
-    # print(f"Got response in {toc - tic:0.4f} seconds")
+    #toc = time.perf_counter()
+    # print(f"Got response in {#toc - tic:0.4f} seconds")
     conversation.append({'role': 'assistant', 'content': response})
     all_messages.append('CHATBOT: %s' % response)
     # print('\n\nCHATBOT: %s' % response)
@@ -153,7 +153,7 @@ def get_response(message,content):
 
     try:
 
-        if len(all_messages) > 5:
+        if len(all_messages) > 50:
             all_messages.pop(0)
         main_scratchpad = '\n\n'.join(all_messages).strip()
 
@@ -162,7 +162,7 @@ def get_response(message,content):
         # print("\n==============================================================================================================\n")
         if collection.count() == 0:
             # yay first KB!
-            tic = time.perf_counter()
+            #tic = time.perf_counter()
             kb_convo = list()
             kb_convo.append({'role': 'system', 'content': open_file('system_instantiate_new_kb.txt')})
             kb_convo.append({'role': 'user', 'content': main_scratchpad})
@@ -170,25 +170,25 @@ def get_response(message,content):
             new_id = str(uuid4())
             if "no new kb article" not in article.lower():
                 collection.add(documents=[article],ids=[new_id])
-            toc = time.perf_counter()
-            # print(f"Chroma added in {toc - tic:0.4f} seconds")
+            #toc = time.perf_counter()
+            # print(f"Chroma added in {#toc - tic:0.4f} seconds")
         else:
-            tic = time.perf_counter()
+            #tic = time.perf_counter()
             results = collection.query(query_texts=[content], n_results=1)
-            toc = time.perf_counter()
-            # print(f"Chroma done query in {toc - tic:0.4f} seconds")
+            #toc = time.perf_counter()
+            # print(f"Chroma done query in {#toc - tic:0.4f} seconds")
             kb = results['documents'][0][0]
             kb_id = results['ids'][0][0]
             
             # Expand current KB
-            tic = time.perf_counter()
+            #tic = time.perf_counter()
             kb_convo = list()
             kb_convo.append({'role': 'system', 'content': open_file('system_update_existing_kb.txt').replace('<<KB>>', kb)})
             kb_convo.append({'role': 'user', 'content': main_scratchpad})
             article = chatbot(kb_convo)
-            toc = time.perf_counter()
-            # print(f"Preparing kb in {toc - tic:0.4f} seconds")
-            tic = time.perf_counter()
+            #toc = time.perf_counter()
+            # print(f"Preparing kb in {#toc - tic:0.4f} seconds")
+            #tic = time.perf_counter()
             # print("\n\nKB Convo:\n")
             # print(kb_convo)
             # print("\nArticle:\n")
@@ -196,14 +196,14 @@ def get_response(message,content):
             # print("\n==============================================================================================================\n")
             if "no new kb article" not in article.lower():
                 collection.update(ids=[kb_id],documents=[article])
-            toc = time.perf_counter()
-            # print(f"Chroma done update in {toc - tic:0.4f} seconds")
+            #toc = time.perf_counter()
+            # print(f"Chroma done update in {#toc - tic:0.4f} seconds")
             
             # Split KB if too large
             kb_len = len(article.split(' '))
             if kb_len > 1000:
                 # print("KB article too big. Splitting in two")
-                tic = time.perf_counter()
+                #tic = time.perf_counter()
                 kb_convo = list()
                 kb_convo.append({'role': 'system', 'content': open_file('system_split_kb.txt')})
                 kb_convo.append({'role': 'user', 'content': article})
@@ -211,21 +211,21 @@ def get_response(message,content):
                 a1 = articles[0].replace('ARTICLE 1:', '').strip()
                 a2 = articles[1].strip()
                 collection.update(ids=[kb_id],documents=[a1])
-                toc = time.perf_counter()
-                # print(f"Chroma updated in {toc - tic:0.4f} seconds")
-                tic = time.perf_counter()
+                #toc = time.perf_counter()
+                # print(f"Chroma updated in {#toc - tic:0.4f} seconds")
+                #tic = time.perf_counter()
                 new_id = str(uuid4())
                 collection.add(documents=[a2],ids=[new_id])
-                toc = time.perf_counter()
-                # print(f"Chroma other half added in {toc - tic:0.4f} seconds")
+                #toc = time.perf_counter()
+                # print(f"Chroma other half added in {#toc - tic:0.4f} seconds")
     except Exception as oops:
         print("Caught error updating KB:",oops)
     
     try:
-        tic = time.perf_counter()
+        #tic = time.perf_counter()
         chroma_client.persist()
-        toc = time.perf_counter()
-        # print(f"Chroma done persist in {toc - tic:0.4f} seconds")
+        #toc = time.perf_counter()
+        # print(f"Chroma done persist in {#toc - tic:0.4f} seconds")
     except Exception as oops:
         print("Caught error persisting Chromadb:",oops)
 
