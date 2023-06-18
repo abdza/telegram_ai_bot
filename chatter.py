@@ -30,6 +30,8 @@ chromadb_dir = os.path.join(script_dir,'chromadb')
 
 sentinal = None
 stop_sentinal = False
+chat_model = "gpt-4"
+# chat_model = "gpt-3.5-turbo"
 watched_tickers = []
 
 def save_file(filepath, content):
@@ -41,13 +43,14 @@ def open_file(filepath):
     with open(finalfilepath, 'r', encoding='utf-8', errors='ignore') as infile:
         return infile.read()
 
-default_system_text = 'system_reflective_journaling.txt'
+# default_system_text = 'system_reflective_journaling.txt'
+default_system_text = 'system_ai_friend.txt'
 conversation = list()
 conversation.append({'role': 'system', 'content': open_file(default_system_text)})
 user_messages = list()
 all_messages = list()
 
-def chatbot(messages, model="gpt-4", temperature=0.0):
+def chatbot(messages, model=chat_model, temperature=0.0):
     max_retry = 7
     retry = 0
     while True:
@@ -111,6 +114,7 @@ def get_response(message,content):
     # print("\n==============================================================================================================\n")
 
     response = chatbot(conversation,temperature=0.8)
+    print("Raw response:",response)
     toc = time.perf_counter()
     # print(f"Got response in {toc - tic:0.4f} seconds")
     conversation.append({'role': 'assistant', 'content': response})
@@ -432,6 +436,21 @@ def catch_all(message):
     if message.chat.type == 'private' or message.entities!=None:
         try:
             response = get_response(message,message.text)
+            print("Got response:",response)
+            if "Response image:" in response:
+                try:
+                    resp_prompt = response.split("Response image:")
+                    print("Got prompt:",resp_prompt[1])
+                    response_image = openai.Image.create(
+                        prompt=resp_prompt[1],
+                    n=1,
+                    size="1024x1024"
+                    )
+                    response = resp_prompt[0]
+                    image_url = response_image['data'][0]['url']
+                    bot.send_photo(message.chat.id, image_url)
+                except Exception as e:
+                    bot.reply_to(message, "Sorry, " + str(e))
             bot.reply_to(message, response)
         except Exception as e:
             bot.reply_to(message, "Sorry, " + str(e))
