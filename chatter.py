@@ -61,7 +61,7 @@ def update_db():
     messages = cursor.execute("SELECT role,timestamp,message FROM chat ORDER BY timestamp asc limit 50").fetchall()
 
     for m in messages:
-        m_text = m[2] + '\n\nTimestamp :' + str(m[1])
+        m_text = m[2]
         if m[0]=='user':
             user_messages.append(m_text)
             all_messages.append('USER: %s' % m_text)
