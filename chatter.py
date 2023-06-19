@@ -226,6 +226,7 @@ def get_response(message,content):
     default_system = open_file(default_system_text).replace('<<KB>>', kb)
     # print('SYSTEM: %s' % default_system)
     conversation[0]['content'] = default_system
+    conversation[0]['role'] = 'system'
     # print("\n==============================================================================================================\n")
 
     cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
