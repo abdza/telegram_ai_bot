@@ -36,6 +36,7 @@ stop_sentinal = False
 chat_model = "gpt-4"
 # chat_model = "gpt-3.5-turbo"
 watched_tickers = []
+token_costs = {'user':0.3,'assistant':0.6}
 
 
 def save_file(filepath, content):
@@ -52,7 +53,7 @@ def open_file(filepath):
 def update_db():
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT, tokens INTEGER)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT, tokens INTEGER, costs REAL)")
     con.commit()
     con.close()
 
@@ -232,11 +233,13 @@ def get_response(message,content):
     # print("\n==============================================================================================================\n")
 
     tokencount = num_tokens_from_string(str(conversation))
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens) VALUES (datetime('now'), 'user', ?, ?, ?, ?)", (message.from_user.id, message.chat.id, content, tokencount))
+    costs = (tokencount/1000) * token_costs['user']
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens, costs) VALUES (datetime('now'), 'user', ?, ?, ?, ?, ?)", (message.from_user.id, message.chat.id, content, tokencount, costs))
     print("Raw token: ",tokencount," Content:\n",str(conversation))
     response = chatbot(conversation,temperature=0.8)
     tokencount = num_tokens_from_string(response)
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens) VALUES (datetime('now'), 'assistant', ?, ?, ?, ?)", (message.from_user.id, message.chat.id, response, tokencount))
+    costs = (tokencount/1000) * token_costs['assistant']
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens, costs) VALUES (datetime('now'), 'assistant', ?, ?, ?, ?, ?)", (message.from_user.id, message.chat.id, response, tokencount, costs))
     con.commit()
     con.close()
     print("Response token: ",tokencount, " Response:\n",response)
@@ -271,8 +274,8 @@ def msg_length(message):
     try:
         con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
         cursor = con.cursor()
-        messages = cursor.execute("SELECT message,role FROM chat WHERE chat = ? ORDER BY timestamp", (message.chat.id,)).fetchall()
-        response = 'Message length: ' + str(len(messages)) + ' messages.'
+        messages = cursor.execute("SELECT count(*) as msglength,sum(tokens) as tokensum, sum(costs) as cost_total FROM chat WHERE chat = ?", (message.chat.id,)).fetchall()
+        response = 'Message count: ' + str(messages[0][0]) + ' messages. Total tokens: ' + str(messages[0][1]) + ' . Total cost: ' + str(messages[0][2])
         con.close()
         bot.reply_to(message, response)
     except Exception as e:
@@ -492,7 +495,6 @@ def catch_all(message):
     if message.chat.type == 'private' or message.entities!=None:
         try:
             response = get_response(message,message.text)
-            print("Got response:",response)
             if "Response image:" in response:
                 try:
                     resp_prompt = response.split("Response image:")
