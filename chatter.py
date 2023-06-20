@@ -7,6 +7,7 @@ import os
 import textract
 import chromadb
 import threading
+import tiktoken
 # from re import template
 # from urlextract import URLExtract
 # import urllib
@@ -51,7 +52,7 @@ def open_file(filepath):
 def update_db():
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT, tokens INTEGER)")
     con.commit()
     con.close()
 
@@ -84,9 +85,6 @@ def chatbot(messages, model=chat_model, temperature=0.0):
 
 def update_kb(content, chroma_client, collection, all_messages):
     try:
-
-        if len(all_messages) > 50:
-            all_messages.pop(0)
         main_scratchpad = '\n\n'.join(all_messages).strip()
 
         # print('\n\nUpdating KB...')
@@ -126,8 +124,8 @@ def update_kb(content, chroma_client, collection, all_messages):
             # print("\nArticle:\n")
             # print(article)
             # print("\n==============================================================================================================\n")
-            if "no new kb article" not in article.lower():
-                collection.update(ids=[kb_id],documents=[article])
+            # if "no new kb article" not in article.lower():
+            #     collection.update(ids=[kb_id],documents=[article])
             #toc = time.perf_counter()
             # print(f"Chroma done update in {#toc - tic:0.4f} seconds")
             
@@ -150,6 +148,8 @@ def update_kb(content, chroma_client, collection, all_messages):
                 collection.add(documents=[a2],ids=[new_id])
                 #toc = time.perf_counter()
                 # print(f"Chroma other half added in {#toc - tic:0.4f} seconds")
+            elif "no new kb article" not in article.lower():
+                collection.update(ids=[kb_id],documents=[article])
     except Exception as oops:
         print("Caught error updating KB:",oops)
     
@@ -161,17 +161,23 @@ def update_kb(content, chroma_client, collection, all_messages):
     except Exception as oops:
         print("Caught error persisting Chromadb:",oops)
 
+def num_tokens_from_string(string: str, encoding_name: str = "cl100k_base") -> int:
+    """Returns the number of tokens in a text string."""
+    encoding = tiktoken.get_encoding(encoding_name)
+    num_tokens = len(encoding.encode(string))
+    return num_tokens
+
 def get_response(message,content):
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
 
-    default_system_text = 'system_ai_friend.txt'
+    default_system_text = 'system_short_ai_friend.txt'
     conversation = list()
     conversation.append({'role': 'system', 'content': open_file(default_system_text)})
     user_messages = list()
     all_messages = list()
 
-    messages = cursor.execute("SELECT role,timestamp,message FROM chat where user = ? ORDER BY timestamp asc limit 50",(message.from_user.id,)).fetchall()
+    messages = cursor.execute("SELECT role,timestamp,message FROM chat where user = ? ORDER BY timestamp asc limit 10",(message.from_user.id,)).fetchall()
 
     for m in messages:
         m_text = m[2]
@@ -210,10 +216,6 @@ def get_response(message,content):
     all_messages.append('USER: %s' % text)
     conversation.append({'role': 'user', 'content': text})
 
-    if len(all_messages) > 50:
-        all_messages.pop(0)
-    main_scratchpad = '\n\n'.join(all_messages).strip()
-
     kb = 'No KB articles yet'
     if collection.count() > 0:
         #tic = time.perf_counter()
@@ -229,12 +231,15 @@ def get_response(message,content):
     conversation[0]['role'] = 'system'
     # print("\n==============================================================================================================\n")
 
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'user', ?, ?, ?)", (message.from_user.id, message.chat.id, content))
+    tokencount = num_tokens_from_string(str(conversation))
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens) VALUES (datetime('now'), 'user', ?, ?, ?, ?)", (message.from_user.id, message.chat.id, content, tokencount))
+    print("Raw token: ",tokencount," Content:\n",str(conversation))
     response = chatbot(conversation,temperature=0.8)
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message) VALUES (datetime('now'), 'assistant', ?, ?, ?)", (message.from_user.id, message.chat.id, response))
+    tokencount = num_tokens_from_string(response)
+    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens) VALUES (datetime('now'), 'assistant', ?, ?, ?, ?)", (message.from_user.id, message.chat.id, response, tokencount))
     con.commit()
     con.close()
-    print("Raw response:",response)
+    print("Response token: ",tokencount, " Response:\n",response)
     #toc = time.perf_counter()
     # print(f"Got response in {#toc - tic:0.4f} seconds")
     conversation.append({'role': 'assistant', 'content': response})
@@ -509,4 +514,4 @@ def catch_all(message):
         pass
 
 update_db()
-bot.infinity_polling(timeout=100,long_polling_timeout=100)
+bot.infinity_polling(timeout=150,long_polling_timeout=150)

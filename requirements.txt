@@ -10,3 +10,4 @@ scikit-learn
 numerize
 chromadb
 urlextract
+tiktoken
