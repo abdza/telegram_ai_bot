@@ -98,6 +98,7 @@ def update_kb(content, chroma_client, collection, all_messages):
             kb_convo.append({'role': 'system', 'content': open_file('system_instantiate_new_kb.txt')})
             kb_convo.append({'role': 'user', 'content': main_scratchpad})
             article = chatbot(kb_convo)
+            print("Creating new article :",article)
             new_id = str(uuid4())
             if "no new kb article" not in article.lower():
                 collection.add(documents=[article],ids=[new_id])
@@ -117,6 +118,7 @@ def update_kb(content, chroma_client, collection, all_messages):
             kb_convo.append({'role': 'system', 'content': open_file('system_update_existing_kb.txt').replace('<<KB>>', kb)})
             kb_convo.append({'role': 'user', 'content': main_scratchpad})
             article = chatbot(kb_convo)
+            print("Updating article to :",article)
             #toc = time.perf_counter()
             # print(f"Preparing kb in {#toc - tic:0.4f} seconds")
             #tic = time.perf_counter()
@@ -139,6 +141,7 @@ def update_kb(content, chroma_client, collection, all_messages):
                 kb_convo.append({'role': 'system', 'content': open_file('system_split_kb.txt')})
                 kb_convo.append({'role': 'user', 'content': article})
                 articles = chatbot(kb_convo).split('ARTICLE 2:')
+                print("Article split results: ",articles)
                 a1 = articles[0].replace('ARTICLE 1:', '').strip()
                 a2 = articles[1].strip()
                 collection.update(ids=[kb_id],documents=[a1])
@@ -168,49 +171,54 @@ def num_tokens_from_string(string: str, encoding_name: str = "cl100k_base") -> i
     num_tokens = len(encoding.encode(string))
     return num_tokens
 
-def get_response(message,content):
+def get_response(message,content,enable_kb=True):
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
 
     default_system_text = 'system_short_ai_friend.txt'
     conversation = list()
-    conversation.append({'role': 'system', 'content': open_file(default_system_text)})
+    if enable_kb:
+        conversation.append({'role': 'system', 'content': open_file(default_system_text)})
+    else:
+        conversation.append({'role': 'system', 'content': 'Be kind and truthful' })
     user_messages = list()
     all_messages = list()
 
-    messages = cursor.execute("SELECT role,timestamp,message FROM chat where user = ? ORDER BY timestamp asc limit 10",(message.from_user.id,)).fetchall()
-
-    for m in messages:
-        m_text = m[2]
-        if m[0]=='user':
-            user_messages.append(m_text)
-            all_messages.append('USER: %s' % m_text)
-            conversation.append({'role': 'user', 'content': m_text})
-        else:
-            conversation.append({'role': 'assistant', 'content': m_text})
-            all_messages.append('CHATBOT: %s' % m_text)
-
-    #tic = time.perf_counter()
     chroma_client = chromadb.Client(Settings(persist_directory=chromadb_dir,chroma_db_impl="duckdb+parquet",))
     print("User Id:", message.from_user.id)
     print("Chat Id:", message.chat.id)
     collection_name = "knowledge_base_" + str(message.from_user.id)
     print("Collection name: ",collection_name)
     collection = chroma_client.get_or_create_collection(name=collection_name)
-    #toc = time.perf_counter()
-    # print(f"Setup chroma in {#toc - tic:0.4f} seconds")
-    # print("\n\nKB Collection Amount:",collection.count())
 
-    # extractor = URLExtract()
-    # urls = extractor.find_urls(content)
-    # for url in urls:
-    #     try:
-    #         pagecontent = urllib.request.urlopen(url).read()
-    #         content += "\n\nContent for " + url + " is:" + str(pagecontent) + "\n\n"
-    #     except Exception as oops:
-    #         print("Caught error browsing: ",url," with error msg:",oops)
-    #
-    # print("Current content:",content)
+    if enable_kb:
+        messages = cursor.execute("SELECT role,timestamp,message FROM chat where user = ? ORDER BY timestamp asc limit 10",(message.from_user.id,)).fetchall()
+
+        for m in messages:
+            m_text = m[2]
+            if m[0]=='user':
+                user_messages.append(m_text)
+                all_messages.append('USER: %s' % m_text)
+                conversation.append({'role': 'user', 'content': m_text})
+            else:
+                conversation.append({'role': 'assistant', 'content': m_text})
+                all_messages.append('CHATBOT: %s' % m_text)
+
+        #tic = time.perf_counter()
+        #toc = time.perf_counter()
+        # print(f"Setup chroma in {#toc - tic:0.4f} seconds")
+        # print("\n\nKB Collection Amount:",collection.count())
+
+        # extractor = URLExtract()
+        # urls = extractor.find_urls(content)
+        # for url in urls:
+        #     try:
+        #         pagecontent = urllib.request.urlopen(url).read()
+        #         content += "\n\nContent for " + url + " is:" + str(pagecontent) + "\n\n"
+        #     except Exception as oops:
+        #         print("Caught error browsing: ",url," with error msg:",oops)
+        #
+        # print("Current content:",content)
 
     text = content + "\n\nTimestamp: " + str(datetime.now())
     user_messages.append(text)
@@ -218,18 +226,19 @@ def get_response(message,content):
     conversation.append({'role': 'user', 'content': text})
 
     kb = 'No KB articles yet'
-    if collection.count() > 0:
+
+    if enable_kb and collection.count() > 0:
         #tic = time.perf_counter()
         results = collection.query(query_texts=[content], n_results=1)
         kb = results['documents'][0][0]
         # print('\n\nDEBUG: Found results %s' % results)
         #toc = time.perf_counter()
         # print(f"Chroma query in {#toc - tic:0.4f} seconds")
-    #tic = time.perf_counter()
-    default_system = open_file(default_system_text).replace('<<KB>>', kb)
-    # print('SYSTEM: %s' % default_system)
-    conversation[0]['content'] = default_system
-    conversation[0]['role'] = 'system'
+        #tic = time.perf_counter()
+        default_system = open_file(default_system_text).replace('<<KB>>', kb)
+        # print('SYSTEM: %s' % default_system)
+        conversation[0]['content'] = default_system
+        conversation[0]['role'] = 'system'
     # print("\n==============================================================================================================\n")
 
     tokencount = num_tokens_from_string(str(conversation))
@@ -250,9 +259,10 @@ def get_response(message,content):
     # print('\n\nCHATBOT: %s' % response)
     # print("\n==============================================================================================================\n")
 
-    # update_kb(content, chroma_client, collection, all_messages):
-    kb_updater = threading.Thread(target=update_kb, args=(content, chroma_client, collection, all_messages))
-    kb_updater.start()
+    if enable_kb:
+        # update_kb(content, chroma_client, collection, all_messages):
+        kb_updater = threading.Thread(target=update_kb, args=(content, chroma_client, collection, all_messages))
+        kb_updater.start()
 
     return response
 
@@ -489,6 +499,31 @@ def voice_processing(message):
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['r','b','raw','basic'])
+def catch_all_basic(message):
+    if message.chat.type == 'private' or message.entities!=None:
+        try:
+            response = get_response(message,message.text,False)
+            if "Response image:" in response:
+                try:
+                    resp_prompt = response.split("Response image:")
+                    print("Got prompt:",resp_prompt[1])
+                    response_image = openai.Image.create(
+                        prompt=resp_prompt[1],
+                    n=1,
+                    size="1024x1024"
+                    )
+                    response = resp_prompt[0]
+                    image_url = response_image['data'][0]['url']
+                    bot.send_photo(message.chat.id, image_url)
+                except Exception as e:
+                    bot.reply_to(message, "Sorry, " + str(e))
+            bot.reply_to(message, response)
+        except Exception as e:
+            bot.reply_to(message, "Sorry, " + str(e))
+    else:
+        pass
 
 @bot.message_handler()
 def catch_all(message):
