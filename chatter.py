@@ -33,7 +33,8 @@ chromadb_dir = os.path.join(script_dir,'chromadb')
 
 sentinal = None
 stop_sentinal = False
-chat_model = "gpt-4"
+chat_model = "gpt-4-1106-preview"
+# chat_model = "gpt-4"
 # chat_model = "gpt-3.5-turbo"
 watched_tickers = []
 token_costs = {'user':0.3,'assistant':0.6}
