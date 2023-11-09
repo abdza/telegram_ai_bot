@@ -73,7 +73,6 @@ def get_response(message,content):
     thread = cursor.execute("SELECT * FROM threads where user_id = ? ORDER BY timestamp desc limit 1",(message.from_user.id,)).fetchall()
     ai_thread = None
     print("Threads: ", thread)
-    print("Thread id: ", thread[0][2])
     if not thread:
         ai_thread = AIClient.beta.threads.create()
         cursor.execute("INSERT INTO threads (timestamp, thread_id, user_id) VALUES (datetime('now'), ?, ?)", (ai_thread.id, message.from_user.id))
