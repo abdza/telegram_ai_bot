@@ -6,6 +6,7 @@ import settings
 import os
 import textract
 import pprint
+import base64
 # import chromadb
 # import threading
 # import tiktoken
@@ -65,6 +66,29 @@ def update_db():
     con.commit()
     con.close()
 
+def append_message(message,content,message_role='assistant'):
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
+
+    thread = cursor.execute("SELECT * FROM threads where user_id = ? ORDER BY timestamp desc limit 1",(message.from_user.id,)).fetchall()
+    ai_thread = None
+    print("Threads: ", thread)
+    if not thread:
+        ai_thread = AIClient.beta.threads.create()
+        cursor.execute("INSERT INTO threads (timestamp, thread_id, user_id) VALUES (datetime('now'), ?, ?)", (ai_thread.id, message.from_user.id))
+    else:
+        ai_thread = AIClient.beta.threads.retrieve(thread[0][2])
+
+    print("AI Thread:",ai_thread)
+    print("User Id:", message.from_user.id)
+    print("Chat Id:", message.chat.id)
+
+    if ai_thread:
+        AIClient.beta.threads.messages.create(ai_thread.id,role=message_role,content=content)
+
+    con.commit()
+    con.close()
+
 def get_response(message,content):
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
@@ -85,7 +109,7 @@ def get_response(message,content):
 
     if ai_thread:
         send_message = AIClient.beta.threads.messages.create(ai_thread.id,role='user',content=content)
-        print("Sent message:")
+        print("Sent message:",content)
 
         message_run = AIClient.beta.threads.runs.create(
             thread_id=ai_thread.id,
@@ -268,13 +292,48 @@ def stock_levels(message):
 def imagine(message):
     print("Got image request:",message)
     try:
-        response = openai.Image.create(
-            prompt=message.text,
-        n=1,
-        size="1024x1024"
+        response_image = AIClient.images.generate(
+            model="dall-e-3",
+            prompt=message,
+            n=1,
+            size="1024x1024"
         )
-        image_url = response['data'][0]['url']
+        image_url = response_image.data[0].url
         bot.send_photo(message.chat.id, image_url)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+@bot.message_handler(content_types=['photo'])
+def photo_processing(message):
+    try:
+        file_info = bot.get_file(message.photo[0].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        with open(os.path.join(script_dir,file_info.file_path), 'wb') as new_file:
+            new_file.write(downloaded_file)
+        response = AIClient.chat.completions.create(
+            model="gpt-4-vision-preview",
+            messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": message.caption},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/jpeg;base64," + encode_image(os.path.join(script_dir,file_info.file_path)),
+                        },
+                    },
+                ],
+            }
+            ],
+            max_tokens=300,
+        )
+        # print("Response:",response)
+        bot.reply_to(message, response.choices[0].message.content)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
 
@@ -307,31 +366,6 @@ def voice_processing(message):
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
-
-@bot.message_handler(commands=['r','b','raw','basic'])
-def catch_all_basic(message):
-    if message.chat.type == 'private' or message.entities!=None:
-        try:
-            response = get_response(message,message.text)
-            if "Response image:" in response:
-                try:
-                    resp_prompt = response.split("Response image:")
-                    print("Got prompt:",resp_prompt[1])
-                    response_image = openai.Image.create(
-                        prompt=resp_prompt[1],
-                    n=1,
-                    size="1024x1024"
-                    )
-                    response = resp_prompt[0]
-                    image_url = response_image['data'][0]['url']
-                    bot.send_photo(message.chat.id, image_url)
-                except Exception as e:
-                    bot.reply_to(message, "Sorry, " + str(e))
-            bot.reply_to(message, response)
-        except Exception as e:
-            bot.reply_to(message, "Sorry, " + str(e))
-    else:
-        pass
 
 @bot.message_handler()
 def catch_all(message):
