@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 
 import telebot
-import openai
+from openai import OpenAI
 import settings
 import os
 import textract
-import chromadb
-import threading
-import tiktoken
+import pprint
+# import chromadb
+# import threading
+# import tiktoken
 # from re import template
 # from urlextract import URLExtract
 # import urllib
-from chromadb.config import Settings
+# from chromadb.config import Settings
 import time
 from uuid import uuid4
 import sqlite3
@@ -23,21 +24,18 @@ from sklearn.cluster import KMeans
 from pydub import AudioSegment
 
 bot = telebot.TeleBot(settings.telebot_key)
-openai.api_key = settings.openai_key
+# openai.api_key = settings.openai_key
 
 script_path = os.path.abspath(__file__)
 
 # Get the directory containing the current script
 script_dir = os.path.dirname(script_path)
-chromadb_dir = os.path.join(script_dir,'chromadb')
 
-sentinal = None
-stop_sentinal = False
 chat_model = "gpt-4-1106-preview"
 # chat_model = "gpt-4"
 # chat_model = "gpt-3.5-turbo"
-watched_tickers = []
-token_costs = {'user':0.3,'assistant':0.6}
+
+pp = pprint.PrettyPrinter(indent=4)
 
 
 def save_file(filepath, content):
@@ -49,221 +47,68 @@ def open_file(filepath):
     with open(finalfilepath, 'r', encoding='utf-8', errors='ignore') as infile:
         return infile.read()
 
-# default_system_text = 'system_reflective_journaling.txt'
+AIClient = OpenAI(
+    api_key=settings.openai_key
+)
+AIAssistant = AIClient.beta.assistants.create(
+    name="Telegram Bot",
+    instructions=open_file('system_ai_friend.txt'),
+    tools=[{"type": "code_interpreter"},{"type": "retrieval"}],
+    model="gpt-4-1106-preview"
+)
 
 def update_db():
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS threads (id INTEGER PRIMARY KEY, timestamp, thread_id TEXT, user_id TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT, tokens INTEGER, costs REAL)")
     con.commit()
     con.close()
 
-
-def chatbot(messages, model=chat_model, temperature=0.0):
-    max_retry = 7
-    retry = 0
-    while True:
-        try:
-            response = openai.ChatCompletion.create(model=model, messages=messages, temperature=temperature)
-            text = response['choices'][0]['message']['content']
-            
-            ###    trim message object
-            if response['usage']['total_tokens'] >= 7000:
-                a = messages.pop(1)
-            
-            return text
-        except Exception as oops:
-            print(f'\n\nError communicating with OpenAI: "{oops}"')
-            if 'maximum context length' in str(oops):
-                a = messages.pop(1)
-                print('\n\n DEBUG: Trimming oldest message')
-                continue
-            retry += 1
-            if retry >= max_retry:
-                print(f"\n\nExiting due to excessive errors in API: {oops}")
-                exit(1)
-            print(f'\n\nRetrying in {2 ** (retry - 1) * 5} seconds...')
-            time.sleep(2 ** (retry - 1) * 5)
-
-def update_kb(content, chroma_client, collection, all_messages):
-    try:
-        main_scratchpad = '\n\n'.join(all_messages).strip()
-
-        # print('\n\nUpdating KB...')
-        # print(main_scratchpad)
-        # print("\n==============================================================================================================\n")
-        if collection.count() == 0:
-            # yay first KB!
-            #tic = time.perf_counter()
-            kb_convo = list()
-            kb_convo.append({'role': 'system', 'content': open_file('system_instantiate_new_kb.txt')})
-            kb_convo.append({'role': 'user', 'content': main_scratchpad})
-            article = chatbot(kb_convo)
-            print("Creating new article :",article)
-            new_id = str(uuid4())
-            if "no new kb article" not in article.lower():
-                collection.add(documents=[article],ids=[new_id])
-            #toc = time.perf_counter()
-            # print(f"Chroma added in {#toc - tic:0.4f} seconds")
-        else:
-            #tic = time.perf_counter()
-            results = collection.query(query_texts=[content], n_results=1)
-            #toc = time.perf_counter()
-            # print(f"Chroma done query in {#toc - tic:0.4f} seconds")
-            kb = results['documents'][0][0]
-            kb_id = results['ids'][0][0]
-            
-            # Expand current KB
-            #tic = time.perf_counter()
-            kb_convo = list()
-            kb_convo.append({'role': 'system', 'content': open_file('system_update_existing_kb.txt').replace('<<KB>>', kb)})
-            kb_convo.append({'role': 'user', 'content': main_scratchpad})
-            article = chatbot(kb_convo)
-            print("Updating article to :",article)
-            #toc = time.perf_counter()
-            # print(f"Preparing kb in {#toc - tic:0.4f} seconds")
-            #tic = time.perf_counter()
-            # print("\n\nKB Convo:\n")
-            # print(kb_convo)
-            # print("\nArticle:\n")
-            # print(article)
-            # print("\n==============================================================================================================\n")
-            # if "no new kb article" not in article.lower():
-            #     collection.update(ids=[kb_id],documents=[article])
-            #toc = time.perf_counter()
-            # print(f"Chroma done update in {#toc - tic:0.4f} seconds")
-            
-            # Split KB if too large
-            kb_len = len(article.split(' '))
-            if kb_len > 1000:
-                # print("KB article too big. Splitting in two")
-                #tic = time.perf_counter()
-                kb_convo = list()
-                kb_convo.append({'role': 'system', 'content': open_file('system_split_kb.txt')})
-                kb_convo.append({'role': 'user', 'content': article})
-                articles = chatbot(kb_convo).split('ARTICLE 2:')
-                print("Article split results: ",articles)
-                a1 = articles[0].replace('ARTICLE 1:', '').strip()
-                a2 = articles[1].strip()
-                collection.update(ids=[kb_id],documents=[a1])
-                #toc = time.perf_counter()
-                # print(f"Chroma updated in {#toc - tic:0.4f} seconds")
-                #tic = time.perf_counter()
-                new_id = str(uuid4())
-                collection.add(documents=[a2],ids=[new_id])
-                #toc = time.perf_counter()
-                # print(f"Chroma other half added in {#toc - tic:0.4f} seconds")
-            elif "no new kb article" not in article.lower():
-                collection.update(ids=[kb_id],documents=[article])
-    except Exception as oops:
-        print("Caught error updating KB:",oops)
-    
-    try:
-        #tic = time.perf_counter()
-        chroma_client.persist()
-        #toc = time.perf_counter()
-        # print(f"Chroma done persist in {#toc - tic:0.4f} seconds")
-    except Exception as oops:
-        print("Caught error persisting Chromadb:",oops)
-
-def num_tokens_from_string(string: str, encoding_name: str = "cl100k_base") -> int:
-    """Returns the number of tokens in a text string."""
-    encoding = tiktoken.get_encoding(encoding_name)
-    num_tokens = len(encoding.encode(string))
-    return num_tokens
-
-def get_response(message,content,enable_kb=True):
+def get_response(message,content):
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
+    response = ""
 
-    default_system_text = 'system_short_ai_friend.txt'
-    conversation = list()
-    if enable_kb:
-        conversation.append({'role': 'system', 'content': open_file(default_system_text)})
+    thread = cursor.execute("SELECT * FROM threads where user_id = ? ORDER BY timestamp desc limit 1",(message.from_user.id,)).fetchall()
+    ai_thread = None
+    print("Threads: ", thread)
+    print("Thread id: ", thread[0][2])
+    if not thread:
+        ai_thread = AIClient.beta.threads.create()
+        cursor.execute("INSERT INTO threads (timestamp, thread_id, user_id) VALUES (datetime('now'), ?, ?)", (ai_thread.id, message.from_user.id))
     else:
-        conversation.append({'role': 'system', 'content': 'Be kind and truthful' })
-    user_messages = list()
-    all_messages = list()
+        ai_thread = AIClient.beta.threads.retrieve(thread[0][2])
 
-    chroma_client = chromadb.Client(Settings(persist_directory=chromadb_dir,chroma_db_impl="duckdb+parquet",))
+    print("AI Thread:",ai_thread)
     print("User Id:", message.from_user.id)
     print("Chat Id:", message.chat.id)
-    collection_name = "knowledge_base_" + str(message.from_user.id)
-    print("Collection name: ",collection_name)
-    collection = chroma_client.get_or_create_collection(name=collection_name)
 
-    if enable_kb:
-        messages = cursor.execute("SELECT role,timestamp,message FROM chat where user = ? ORDER BY timestamp asc limit 10",(message.from_user.id,)).fetchall()
+    if ai_thread:
+        send_message = AIClient.beta.threads.messages.create(ai_thread.id,role='user',content=content)
+        print("Sent message:")
 
-        for m in messages:
-            m_text = m[2]
-            if m[0]=='user':
-                user_messages.append(m_text)
-                all_messages.append('USER: %s' % m_text)
-                conversation.append({'role': 'user', 'content': m_text})
-            else:
-                conversation.append({'role': 'assistant', 'content': m_text})
-                all_messages.append('CHATBOT: %s' % m_text)
+        message_run = AIClient.beta.threads.runs.create(
+            thread_id=ai_thread.id,
+            assistant_id=AIAssistant.id
+        )
 
-        #tic = time.perf_counter()
-        #toc = time.perf_counter()
-        # print(f"Setup chroma in {#toc - tic:0.4f} seconds")
-        # print("\n\nKB Collection Amount:",collection.count())
+        while message_run.status !="completed":
+            message_run = AIClient.beta.threads.runs.retrieve(
+                thread_id=ai_thread.id,
+                run_id=message_run.id
+            )
+            print(message_run.status)
 
-        # extractor = URLExtract()
-        # urls = extractor.find_urls(content)
-        # for url in urls:
-        #     try:
-        #         pagecontent = urllib.request.urlopen(url).read()
-        #         content += "\n\nContent for " + url + " is:" + str(pagecontent) + "\n\n"
-        #     except Exception as oops:
-        #         print("Caught error browsing: ",url," with error msg:",oops)
-        #
-        # print("Current content:",content)
+        messages = AIClient.beta.threads.messages.list(
+            thread_id=ai_thread.id
+        )
 
-    text = content + "\n\nTimestamp: " + str(datetime.now())
-    user_messages.append(text)
-    all_messages.append('USER: %s' % text)
-    conversation.append({'role': 'user', 'content': text})
+        print(messages.data[0].content[0].text.value)
+        response = messages.data[0].content[0].text.value
 
-    kb = 'No KB articles yet'
-
-    if enable_kb and collection.count() > 0:
-        #tic = time.perf_counter()
-        results = collection.query(query_texts=[content], n_results=1)
-        kb = results['documents'][0][0]
-        # print('\n\nDEBUG: Found results %s' % results)
-        #toc = time.perf_counter()
-        # print(f"Chroma query in {#toc - tic:0.4f} seconds")
-        #tic = time.perf_counter()
-        default_system = open_file(default_system_text).replace('<<KB>>', kb)
-        # print('SYSTEM: %s' % default_system)
-        conversation[0]['content'] = default_system
-        conversation[0]['role'] = 'system'
-    # print("\n==============================================================================================================\n")
-
-    tokencount = num_tokens_from_string(str(conversation))
-    costs = (tokencount/1000) * token_costs['user']
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens, costs) VALUES (datetime('now'), 'user', ?, ?, ?, ?, ?)", (message.from_user.id, message.chat.id, content, tokencount, costs))
-    print("Raw token: ",tokencount," Content:\n",str(conversation))
-    response = chatbot(conversation,temperature=0.8)
-    tokencount = num_tokens_from_string(response)
-    costs = (tokencount/1000) * token_costs['assistant']
-    cursor.execute("INSERT INTO chat (timestamp, role, user, chat, message, tokens, costs) VALUES (datetime('now'), 'assistant', ?, ?, ?, ?, ?)", (message.from_user.id, message.chat.id, response, tokencount, costs))
     con.commit()
     con.close()
-    print("Response token: ",tokencount, " Response:\n",response)
-    #toc = time.perf_counter()
-    # print(f"Got response in {#toc - tic:0.4f} seconds")
-    conversation.append({'role': 'assistant', 'content': response})
-    all_messages.append('CHATBOT: %s' % response)
-    # print('\n\nCHATBOT: %s' % response)
-    # print("\n==============================================================================================================\n")
-
-    if enable_kb:
-        # update_kb(content, chroma_client, collection, all_messages):
-        kb_updater = threading.Thread(target=update_kb, args=(content, chroma_client, collection, all_messages))
-        kb_updater.start()
 
     return response
 
@@ -315,41 +160,6 @@ def stock(message):
         bot.reply_to(message, response)
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
-
-def watch_stock_thread(message):
-    global stop_sentinal, watched_tickers
-    tokens = message.text.split(' ')
-    ticker = tokens[1].upper()
-    if ticker in watched_tickers:
-        bot.reply_to(message, "Already watching " + ticker)
-    else:
-        watched_tickers.append(ticker)
-        bot.reply_to(message, "Watching " + ticker)
-    while not stop_sentinal:
-        for tick in watched_tickers:
-            print("Ticker " + tick + " price: ")
-        time.sleep(10)
-
-@bot.message_handler(commands=['watch'])
-def watch_stock(message):
-    try:
-        global sentinal, stop_sentinal, watched_tickers
-        tokens = message.text.split(' ')
-        if sentinal is None:
-            stop_sentinal = False
-            sentinal = threading.Thread(target=watch_stock_thread, args=(message,))
-            sentinal.start()
-            bot.reply_to(message, "Sentinal started watching")
-        else:
-            if len(tokens) > 1 and tokens[1].upper()!='STOP':
-                watch_stock_thread(message)
-            else:
-                stop_sentinal = True
-                sentinal = None
-                watched_tickers = []
-                bot.reply_to(message, "Sentinal stopped watching")
-    except Exception as e:
-        print("Error: ",str(e))
 
 @bot.message_handler(commands=['levels'])
 def stock_levels(message):
@@ -454,8 +264,6 @@ def stock_levels(message):
         
         response += "\n\n" + dresponse
         bot.reply_to(message, response)
-    #except Exception as e:
-        #bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler(commands=['imagine'])
 def imagine(message):
@@ -495,7 +303,7 @@ def voice_processing(message):
             new_file.write(downloaded_file)
         ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
         ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
-        transcript = openai.Audio.transcribe("whisper-1", open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
+        transcript = AIClient.audio.transcriptions.create(model="whisper-1", file=open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
         response = get_response(message,transcript.text)
         bot.reply_to(message, response)
     except Exception as e:
@@ -505,7 +313,7 @@ def voice_processing(message):
 def catch_all_basic(message):
     if message.chat.type == 'private' or message.entities!=None:
         try:
-            response = get_response(message,message.text,False)
+            response = get_response(message,message.text)
             if "Response image:" in response:
                 try:
                     resp_prompt = response.split("Response image:")
@@ -535,17 +343,19 @@ def catch_all(message):
                 try:
                     resp_prompt = response.split("Response image:")
                     print("Got prompt:",resp_prompt[1])
-                    response_image = openai.Image.create(
+                    response_image = AIClient.images.generate(
+                        model="dall-e-3",
                         prompt=resp_prompt[1],
-                    n=1,
-                    size="1024x1024"
+                        n=1,
+                        size="1024x1024"
                     )
                     response = resp_prompt[0]
-                    image_url = response_image['data'][0]['url']
+                    image_url = response_image.data[0].url
                     bot.send_photo(message.chat.id, image_url)
                 except Exception as e:
                     bot.reply_to(message, "Sorry, " + str(e))
-            bot.reply_to(message, response)
+            if len(response):
+                bot.reply_to(message, response)
         except Exception as e:
             bot.reply_to(message, "Sorry, " + str(e))
     else:
