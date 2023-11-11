@@ -51,12 +51,15 @@ def open_file(filepath):
 AIClient = OpenAI(
     api_key=settings.openai_key
 )
-AIAssistant = AIClient.beta.assistants.create(
-    name="Telegram Bot",
-    instructions=open_file('system_ai_friend.txt'),
-    tools=[{"type": "code_interpreter"},{"type": "retrieval"}],
-    model="gpt-4-1106-preview"
-)
+if settings.AIAssistantID:
+    AIAssistant = AIClient.beta.assistants.update(settings.AIAssistantID,instructions=open_file('system_ai_friend.txt'))
+else:
+    AIAssistant = AIClient.beta.assistants.create(
+        name="Telegram Bot",
+        instructions=open_file('system_ai_friend.txt'),
+        tools=[{"type": "code_interpreter"},{"type": "retrieval"}],
+        model="gpt-4-1106-preview"
+    )
 
 def update_db():
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
