@@ -157,7 +157,7 @@ def msg_length(message):
         con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
         cursor = con.cursor()
         messages = cursor.execute("SELECT count(*) as msglength,sum(tokens) as tokensum, sum(costs) as cost_total FROM chat WHERE chat = ?", (message.chat.id,)).fetchall()
-        response = 'Message count: ' + str(messages[0][0]) + ' messages. Total tokens: ' + str(messages[0][1]) + ' . Total cost: ' + str(messages[0][2])
+        response = 'Message Id:' + str(message.chat.id) + ' Msg count: ' + str(messages[0][0]) + ' messages. Total tokens: ' + str(messages[0][1]) + ' . Total cost: ' + str(messages[0][2])
         con.close()
         bot.reply_to(message, response)
     except Exception as e:
