@@ -192,16 +192,16 @@ def stock(message):
 @bot.message_handler(commands=['results'])
 def results(message):
     try:
-        results = pd.read_csv('results.csv')
+        results = pd.read_csv(os.path.join(script_dir,'results.csv'))
         tosend = results[['ticker','marks','price']]
-        bot.reply_to(message, tabulate(tosend,headers="keys"))
+        bot.reply_to(message, tabulate(tosend.iloc[-5:],headers="keys"))
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler(commands=['props'])
 def stock_props(message):
     try:
-        results = pd.read_csv('results.csv')
+        results = pd.read_csv(os.path.join(script_dir,'results.csv'))
         tokens = message.text.split(' ')
         if len(tokens)>1:
             for tk in tokens[1:]:
