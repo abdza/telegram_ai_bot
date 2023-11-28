@@ -11,3 +11,4 @@ numerize
 chromadb
 urlextract
 tiktoken
+tabulate

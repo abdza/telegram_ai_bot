@@ -23,6 +23,8 @@ import numpy as np
 from numerize import numerize
 from sklearn.cluster import KMeans
 from pydub import AudioSegment
+import pandas as pd
+from tabulate import tabulate
 
 bot = telebot.TeleBot(settings.telebot_key)
 # openai.api_key = settings.openai_key
@@ -184,6 +186,35 @@ def stock(message):
         
         response = get_response(message,"Ticker " + ticker + " candles: " + str(candles))
         bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['results'])
+def results(message):
+    try:
+        results = pd.read_csv('results.csv')
+        tosend = results[['ticker','marks','price']]
+        bot.reply_to(message, tabulate(tosend,headers="keys"))
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['props'])
+def stock_props(message):
+    try:
+        results = pd.read_csv('results.csv')
+        tokens = message.text.split(' ')
+        if len(tokens)>1:
+            for tk in tokens[1:]:
+                fresult = results[results['ticker']==tk.upper()]
+                if fresult.empty:
+                    bot.reply_to(message,'Info for ticker ' + tk + ' could not be found')
+                else:
+                    response = fresult['prop']
+                    bot.reply_to(message, response)
+                    response = fresult['levels']
+                    bot.reply_to(message, response)
+        else:
+            bot.reply_to(message,"Need to provide ticker to see")
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
 

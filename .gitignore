@@ -133,3 +133,4 @@ settings.py
 voices/
 documents/
 chatter.db
+*.csv
