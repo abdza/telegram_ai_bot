@@ -27,5 +27,6 @@ else:
     bot.send_message(user_id,tabulate(tosend,headers="keys",tablefmt="github"))
 
     results = pd.read_csv('results.csv').set_index("date")
+    results.sort_values(by=['marks'],ascending=False,inplace=True)
     tosend = results[['ticker','marks','price']]
-    bot.send_message(user_id,tabulate(tosend.iloc[-10:],headers="keys",tablefmt="github"))
+    bot.send_message(user_id,tabulate(tosend.iloc[:10],headers="keys",tablefmt="github"))
