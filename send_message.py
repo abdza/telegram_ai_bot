@@ -22,8 +22,10 @@ if len(sys.argv)>1:
     toout = sys.argv[1].encode('utf-8').decode('unicode_escape')
     bot.send_message(user_id,toout)
 else:
+    results = pd.read_csv('results_predicted.csv').set_index("date")
+    tosend = results[['ticker','predicted_profitable']]
+    bot.send_message(user_id,tabulate(tosend,headers="keys",tablefmt="github"))
+
     results = pd.read_csv('results.csv').set_index("date")
-    print("Results:",tabulate(results.iloc[-3:],headers="keys",tablefmt="grid"))
-        # bot.send_message(user_id,tabulate(results.iloc[i]['ticker'],headers="keys",tablefmt="grid"))
     tosend = results[['ticker','marks','price']]
-    bot.send_message(user_id,tabulate(tosend.iloc[-5:],headers="keys",tablefmt="github"))
+    bot.send_message(user_id,tabulate(tosend.iloc[-10:],headers="keys",tablefmt="github"))
