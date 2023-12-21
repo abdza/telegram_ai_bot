@@ -171,13 +171,14 @@ def subscribe(message):
                 bot.reply_to(message, "You are already subscribed to " + service + " subscription")
             else:
                 failed = False
-                if service=='AICHAT' and len(tokens)<3:
-                    bot.reply_to(message, "Your subscription to " + service + " failed")
-                    failed = True
-                else:
-                    if tokens[2]!=settings.chat_password:
+                if service=='AICHAT':
+                    if len(tokens)<3:
                         bot.reply_to(message, "Your subscription to " + service + " failed")
                         failed = True
+                    else:
+                        if tokens[2]!=settings.chat_password:
+                            bot.reply_to(message, "Your subscription to " + service + " failed")
+                            failed = True
                 if not failed:
                     cursor.execute("INSERT INTO subscribers (user_id, service) VALUES (?, ?)", (message.from_user.id, service))
                     con.commit()
