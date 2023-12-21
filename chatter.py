@@ -67,6 +67,7 @@ def update_db():
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS threads (id INTEGER PRIMARY KEY, timestamp, thread_id TEXT, user_id TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS subscribers (id INTEGER PRIMARY KEY, user_id TEXT, service TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY, timestamp, role TEXT, user TEXT, chat TEXT, message TEXT, tokens INTEGER, costs REAL)")
     con.commit()
     con.close()
@@ -95,48 +96,50 @@ def append_message(message,content,message_role='assistant'):
     con.close()
 
 def get_response(message,content):
+    response = "Hi there!"
     con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
     cursor = con.cursor()
-    response = ""
+    subscription = cursor.execute("select * from subscribers where user_id = ? and service = ?",(message.from_user.id,'AICHAT')).fetchall()
+    if len(subscription)>0:
 
-    thread = cursor.execute("SELECT * FROM threads where user_id = ? ORDER BY timestamp desc limit 1",(message.from_user.id,)).fetchall()
-    ai_thread = None
-    print("Threads: ", thread)
-    if not thread:
-        ai_thread = AIClient.beta.threads.create()
-        cursor.execute("INSERT INTO threads (timestamp, thread_id, user_id) VALUES (datetime('now'), ?, ?)", (ai_thread.id, message.from_user.id))
-    else:
-        ai_thread = AIClient.beta.threads.retrieve(thread[0][2])
+        thread = cursor.execute("SELECT * FROM threads where user_id = ? ORDER BY timestamp desc limit 1",(message.from_user.id,)).fetchall()
+        ai_thread = None
+        print("Threads: ", thread)
+        if not thread:
+            ai_thread = AIClient.beta.threads.create()
+            cursor.execute("INSERT INTO threads (timestamp, thread_id, user_id) VALUES (datetime('now'), ?, ?)", (ai_thread.id, message.from_user.id))
+        else:
+            ai_thread = AIClient.beta.threads.retrieve(thread[0][2])
 
-    print("AI Thread:",ai_thread)
-    print("User Id:", message.from_user.id)
-    print("Chat Id:", message.chat.id)
+        print("AI Thread:",ai_thread)
+        print("User Id:", message.from_user.id)
+        print("Chat Id:", message.chat.id)
 
-    if ai_thread:
-        send_message = AIClient.beta.threads.messages.create(ai_thread.id,role='user',content=content)
-        print("Sent message:",content)
+        if ai_thread:
+            send_message = AIClient.beta.threads.messages.create(ai_thread.id,role='user',content=content)
+            print("Sent message:",content)
 
-        message_run = AIClient.beta.threads.runs.create(
-            thread_id=ai_thread.id,
-            assistant_id=AIAssistant.id
-        )
-
-        while message_run.status !="completed":
-            message_run = AIClient.beta.threads.runs.retrieve(
+            message_run = AIClient.beta.threads.runs.create(
                 thread_id=ai_thread.id,
-                run_id=message_run.id
+                assistant_id=AIAssistant.id
             )
-            print(message_run.status)
 
-        messages = AIClient.beta.threads.messages.list(
-            thread_id=ai_thread.id
-        )
+            while message_run.status !="completed":
+                message_run = AIClient.beta.threads.runs.retrieve(
+                    thread_id=ai_thread.id,
+                    run_id=message_run.id
+                )
+                print(message_run.status)
 
-        print(messages.data[0].content[0].text.value)
-        response = messages.data[0].content[0].text.value
+            messages = AIClient.beta.threads.messages.list(
+                thread_id=ai_thread.id
+            )
 
-    con.commit()
-    con.close()
+            print(messages.data[0].content[0].text.value)
+            response = messages.data[0].content[0].text.value
+
+        con.commit()
+        con.close()
 
     return response
 
@@ -150,6 +153,57 @@ def reset(message):
         con.close()
         response = get_response(message,'Hello. My name is ' + message.from_user.first_name)
         bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['subscribe'])
+def subscribe(message):
+    try:
+        tokens = message.text.split(' ')
+        if len(tokens)<2:
+            bot.reply_to(message, "Please specify the service you'd like to subscribe to")
+        else:
+            service = tokens[1].upper()
+            con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+            cursor = con.cursor()
+            subscription = cursor.execute("select * from subscribers where user_id = ? and service = ?",(message.from_user.id,service)).fetchall()
+            if len(subscription)>0:
+                bot.reply_to(message, "You are already subscribed to " + service + " subscription")
+            else:
+                failed = False
+                if service=='AICHAT' and len(tokens)<3:
+                    bot.reply_to(message, "Your subscription to " + service + " failed")
+                    failed = True
+                else:
+                    if tokens[2]!=settings.chat_password:
+                        bot.reply_to(message, "Your subscription to " + service + " failed")
+                        failed = True
+                if not failed:
+                    cursor.execute("INSERT INTO subscribers (user_id, service) VALUES (?, ?)", (message.from_user.id, service))
+                    con.commit()
+                    con.close()
+                    bot.reply_to(message, "You have succesfully subscribed to " + service + " subscription")
+    except Exception as e:
+        bot.reply_to(message, "Sorry, " + str(e))
+
+@bot.message_handler(commands=['unsubscribe'])
+def unsubscribe(message):
+    try:
+        tokens = message.text.split(' ')
+        if len(tokens)<2:
+            bot.reply_to(message, "Please specify the service you'd like to unsubscribe to")
+        else:
+            service = tokens[1].upper()
+            con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+            cursor = con.cursor()
+            subscription = cursor.execute("select * from subscribers where user_id = ? and service = ?",(message.from_user.id,service)).fetchall()
+            if len(subscription)>0:
+                cursor.execute("delete from subscribers where user_id = ? and service = ?",(message.from_user.id,service))
+                con.commit()
+                con.close()
+                bot.reply_to(message, "You have been unsubscribed from " + service + " subscription")
+            else:
+                bot.reply_to(message, "You are not subscribed to " + service + " subscription")
     except Exception as e:
         bot.reply_to(message, "Sorry, " + str(e))
 
@@ -324,18 +378,22 @@ def stock_levels(message):
 
 @bot.message_handler(commands=['imagine'])
 def imagine(message):
-    print("Got image request:",message)
-    try:
-        response_image = AIClient.images.generate(
-            model="dall-e-3",
-            prompt=message,
-            n=1,
-            size="1024x1024"
-        )
-        image_url = response_image.data[0].url
-        bot.send_photo(message.chat.id, image_url)
-    except Exception as e:
-        bot.reply_to(message, "Sorry, " + str(e))
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
+    subscription = cursor.execute("select * from subscribers where user_id = ? and service = ?",(message.from_user.id,'AICHAT')).fetchall()
+    if len(subscription)>0:
+        print("Got image request:",message)
+        try:
+            response_image = AIClient.images.generate(
+                model="dall-e-3",
+                prompt=message,
+                n=1,
+                size="1024x1024"
+            )
+            image_url = response_image.data[0].url
+            bot.send_photo(message.chat.id, image_url)
+        except Exception as e:
+            bot.reply_to(message, "Sorry, " + str(e))
 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
@@ -343,33 +401,37 @@ def encode_image(image_path):
 
 @bot.message_handler(content_types=['photo'])
 def photo_processing(message):
-    try:
-        file_info = bot.get_file(message.photo[0].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        with open(os.path.join(script_dir,file_info.file_path), 'wb') as new_file:
-            new_file.write(downloaded_file)
-        response = AIClient.chat.completions.create(
-            model="gpt-4-vision-preview",
-            messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": message.caption},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": "data:image/jpeg;base64," + encode_image(os.path.join(script_dir,file_info.file_path)),
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
+    subscription = cursor.execute("select * from subscribers where user_id = ? and service = ?",(message.from_user.id,'AICHAT')).fetchall()
+    if len(subscription)>0:
+        try:
+            file_info = bot.get_file(message.photo[0].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            with open(os.path.join(script_dir,file_info.file_path), 'wb') as new_file:
+                new_file.write(downloaded_file)
+            response = AIClient.chat.completions.create(
+                model="gpt-4-vision-preview",
+                messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": message.caption},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "data:image/jpeg;base64," + encode_image(os.path.join(script_dir,file_info.file_path)),
+                            },
                         },
-                    },
+                    ],
+                }
                 ],
-            }
-            ],
-            max_tokens=300,
-        )
-        # print("Response:",response)
-        bot.reply_to(message, response.choices[0].message.content)
-    except Exception as e:
-        bot.reply_to(message, "Sorry, " + str(e))
+                max_tokens=300,
+            )
+            # print("Response:",response)
+            bot.reply_to(message, response.choices[0].message.content)
+        except Exception as e:
+            bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler(content_types=['document'])
 def document_processing(message):
@@ -387,19 +449,23 @@ def document_processing(message):
 
 @bot.message_handler(content_types=['voice'])
 def voice_processing(message):
-    try:
-        file_info = bot.get_file(message.voice.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        filename = 'voice_' + str(message.from_user.id)
-        with open(os.path.join(script_dir,'voices',filename + '.ogg'), 'wb') as new_file:
-            new_file.write(downloaded_file)
-        ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
-        ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
-        transcript = AIClient.audio.transcriptions.create(model="whisper-1", file=open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
-        response = get_response(message,transcript.text)
-        bot.reply_to(message, response)
-    except Exception as e:
-        bot.reply_to(message, "Sorry, " + str(e))
+    con = sqlite3.connect(os.path.join(script_dir,'chatter.db'))
+    cursor = con.cursor()
+    subscription = cursor.execute("select * from subscribers where user_id = ? and service = ?",(message.from_user.id,'AICHAT')).fetchall()
+    if len(subscription)>0:
+        try:
+            file_info = bot.get_file(message.voice.file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            filename = 'voice_' + str(message.from_user.id)
+            with open(os.path.join(script_dir,'voices',filename + '.ogg'), 'wb') as new_file:
+                new_file.write(downloaded_file)
+            ogg_audio = AudioSegment.from_file(os.path.join(script_dir,'voices',filename + '.ogg'), format="ogg")
+            ogg_audio.export(os.path.join(script_dir,'voices',filename + '.mp3'), format="mp3")
+            transcript = AIClient.audio.transcriptions.create(model="whisper-1", file=open(os.path.join(script_dir,'voices',filename + '.mp3'),'rb'))
+            response = get_response(message,transcript.text)
+            bot.reply_to(message, response)
+        except Exception as e:
+            bot.reply_to(message, "Sorry, " + str(e))
 
 @bot.message_handler()
 def catch_all(message):
