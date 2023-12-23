@@ -23,28 +23,34 @@ if len(subscribers)>0:
             toout = sys.argv[1].encode('utf-8').decode('unicode_escape')
             bot.send_message(subscriber[1],toout)
         else:
-            results = pd.read_csv('results_profitability.csv')
+            results = pd.read_csv(os.path.join(script_dir,'results_profitability.csv'))
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
+
+
             results.sort_values(by=['predicted_profitable'],ascending=False,inplace=True)
-            print("Results:",tabulate(results.iloc[:10],headers="keys",tablefmt="grid"))
             tosend = results[['ticker','predicted_profitable','price']]
-            bot.send_message(subscriber[1],tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Profit Prediction\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+
+            results.sort_values(by=['predicted_diff'],ascending=False,inplace=True)
+            tosend = results[['ticker','predicted_diff','price']]
+            bot.send_message(subscriber[1],'Diff Prediction\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             results.sort_values(by=['marks'],ascending=False,inplace=True)
-            print("Mark Results:",tabulate(results.iloc[:10],headers="keys",tablefmt="grid"))
             tosend = results[['ticker','marks','price']]
-            bot.send_message(subscriber[1],tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+
+            results.sort_values(by=['late_marks'],ascending=False,inplace=True)
+            tosend = results[['ticker','late_marks','price']]
+            bot.send_message(subscriber[1],'Late Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             yesterday = results[results['Yesterday Profitable']==1]
             yesterday = yesterday[yesterday['2 Days Ago Profitable']==1]
             yesterday.sort_values(by=['price'],inplace=True)
-            print("Yesterday Profitable:",tabulate(yesterday.iloc[:10],headers="keys",tablefmt="grid"))
             tosend = yesterday[['ticker','marks','price']]
-            bot.send_message(subscriber[1],tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'2 Days Profitable\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             yesterday = results[results['Yesterday Profitable']==1]
             yesterday = yesterday[yesterday['2 Days Ago Profitable']==0]
             yesterday.sort_values(by=['price'],inplace=True)
-            print("Yesterday Profitable:",tabulate(yesterday.iloc[:10],headers="keys",tablefmt="grid"))
             tosend = yesterday[['ticker','marks','price']]
-            bot.send_message(subscriber[1],tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Only Yesterday Profitable\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))

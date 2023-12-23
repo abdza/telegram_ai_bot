@@ -12,3 +12,4 @@ chromadb
 urlextract
 tiktoken
 tabulate
+telegram
