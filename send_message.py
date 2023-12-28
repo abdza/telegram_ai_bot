@@ -26,14 +26,51 @@ if len(subscribers)>0:
             results = pd.read_csv(os.path.join(script_dir,'results_profitability.csv'))
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
 
-
-            results.sort_values(by=['predicted_profitable'],ascending=False,inplace=True)
-            tosend = results[['ticker','predicted_profitable','price']]
-            bot.send_message(subscriber[1],'Profit Prediction\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
-
-            results.sort_values(by=['predicted_diff'],ascending=False,inplace=True)
-            tosend = results[['ticker','predicted_diff','price']]
-            bot.send_message(subscriber[1],'Diff Prediction\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            curcount = {}
+            results.sort_values(by=['prev_marks'],ascending=False,inplace=True)
+            for ct in results.iloc[:10].values:
+                cticker = ct[1]
+                if cticker in curcount:
+                    curcount[cticker] += 1
+                else:
+                    curcount[cticker] = 1
+            results.sort_values(by=['opening_marks'],ascending=False,inplace=True)
+            for ct in results.iloc[:10].values:
+                cticker = ct[1]
+                if cticker in curcount:
+                    curcount[cticker] += 1
+                else:
+                    curcount[cticker] = 1
+            results.sort_values(by=['late_marks'],ascending=False,inplace=True)
+            for ct in results.iloc[:10].values:
+                cticker = ct[1]
+                if cticker in curcount:
+                    curcount[cticker] += 1
+                else:
+                    curcount[cticker] = 1
+            results.sort_values(by=['hour_marks'],ascending=False,inplace=True)
+            for ct in results.iloc[:10].values:
+                cticker = ct[1]
+                if cticker in curcount:
+                    curcount[cticker] += 1
+                else:
+                    curcount[cticker] = 1
+            results.sort_values(by=['daily_marks'],ascending=False,inplace=True)
+            for ct in results.iloc[:10].values:
+                cticker = ct[1]
+                if cticker in curcount:
+                    curcount[cticker] += 1
+                else:
+                    curcount[cticker] = 1
+            results.sort_values(by=['marks'],ascending=False,inplace=True)
+            for ct in results.iloc[:10].values:
+                cticker = ct[1]
+                if cticker in curcount:
+                    curcount[cticker] += 1
+                else:
+                    curcount[cticker] = 1
+            sortedcount = sorted(curcount.items(), key=lambda x:x[1], reverse=True)
+            bot.send_message(subscriber[1],'Recurring Tickers\n\n' + tabulate(sortedcount,headers=['Ticker','Count']),parse_mode='HTML') #,tablefmt="grid"))
 
             results.sort_values(by=['marks'],ascending=False,inplace=True)
             tosend = results[['ticker','marks','price']]
@@ -42,15 +79,3 @@ if len(subscribers)>0:
             results.sort_values(by=['late_marks'],ascending=False,inplace=True)
             tosend = results[['ticker','late_marks','price']]
             bot.send_message(subscriber[1],'Late Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
-
-            yesterday = results[results['Yesterday Profitable']==1]
-            yesterday = yesterday[yesterday['2 Days Ago Profitable']==1]
-            yesterday.sort_values(by=['price'],inplace=True)
-            tosend = yesterday[['ticker','marks','price']]
-            bot.send_message(subscriber[1],'2 Days Profitable\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
-
-            yesterday = results[results['Yesterday Profitable']==1]
-            yesterday = yesterday[yesterday['2 Days Ago Profitable']==0]
-            yesterday.sort_values(by=['price'],inplace=True)
-            tosend = yesterday[['ticker','marks','price']]
-            bot.send_message(subscriber[1],'Only Yesterday Profitable\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
