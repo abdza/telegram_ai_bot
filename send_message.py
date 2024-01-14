@@ -46,3 +46,11 @@ if len(subscribers)>0:
             tosend.set_index('ticker',inplace=True)
             tosend = tosend.drop(columns=['type',])
             bot.send_message(subscriber[1],'Possible volume super nova\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+
+            results = pd.read_csv(os.path.join(script_dir,'raw_data.csv'))
+            results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
+            results = results.sort_values(by=['range'],ascending=False)
+            tosend = results.iloc[:20]
+            tosend = tosend[['ticker','range','date']]
+            tosend = tosend.set_index('ticker')
+            bot.send_message(subscriber[1],'Pass High Range\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
