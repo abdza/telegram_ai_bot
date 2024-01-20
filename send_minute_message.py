@@ -24,33 +24,33 @@ if len(subscribers)>0:
             toout = sys.argv[1].encode('utf-8').decode('unicode_escape')
             bot.send_message(subscriber[1],toout)
         else:
-            results = pd.read_csv(os.path.join(script_dir,'pattern.csv'))
+            results = pd.read_csv(os.path.join(script_dir,'minute_pattern.csv'))
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
 
             tosend = results.loc[results['type']=='double']
             tosend.set_index('ticker',inplace=True)
             tosend = tosend.drop(columns=['type',])
-            bot.send_message(subscriber[1],'Possible double bottom\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Possible minute double bottom\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             tosend = results.loc[results['type']=='up']
             tosend.set_index('ticker',inplace=True)
             tosend = tosend.drop(columns=['type',])
-            bot.send_message(subscriber[1],'Possible up channel\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Possible minute up channel\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             tosend = results.loc[results['type']=='nova']
             tosend.set_index('ticker',inplace=True)
             tosend = tosend.drop(columns=['type',])
-            bot.send_message(subscriber[1],'Possible super nova\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Possible minute super nova\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             tosend = results.loc[results['type']=='recentnova']
             tosend.set_index('ticker',inplace=True)
             tosend = tosend.drop(columns=['type',])
-            bot.send_message(subscriber[1],'Recent super nova\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Recent minute super nova\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             tosend = results.loc[results['type']=='volumenova']
             tosend.set_index('ticker',inplace=True)
             tosend = tosend.drop(columns=['type',])
-            bot.send_message(subscriber[1],'Possible volume super nova\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Possible minute volume super nova\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             results = pd.read_csv(os.path.join(script_dir,'raw_data.csv'))
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
@@ -58,4 +58,4 @@ if len(subscribers)>0:
             tosend = results.iloc[:20]
             tosend = tosend[['ticker','range','date']]
             tosend = tosend.set_index('ticker')
-            bot.send_message(subscriber[1],'Pass High Range\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            bot.send_message(subscriber[1],'Minute Pass High Range\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
