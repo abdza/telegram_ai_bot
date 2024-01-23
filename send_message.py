@@ -27,6 +27,11 @@ if len(subscribers)>0:
             results = pd.read_csv(os.path.join(script_dir,'pattern.csv'))
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
 
+            tosend = results.loc[results['type']=='hns']
+            tosend.set_index('ticker',inplace=True)
+            tosend = tosend.drop(columns=['type',])
+            bot.send_message(subscriber[1],'Possible head and shoulders\n\n' + tabulate(tosend,headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+
             tosend = results.loc[results['type']=='double']
             tosend.set_index('ticker',inplace=True)
             tosend = tosend.drop(columns=['type',])
