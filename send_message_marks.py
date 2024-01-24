@@ -189,3 +189,14 @@ if len(subscribers)>0:
             yesterday.sort_values(by=['price'],inplace=True)
             tosend = yesterday[['ticker','marks','price']]
             bot.send_message(subscriber[1],'Only Yesterday Barely\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+
+            curcount = {}
+            for day in range(6):
+                results.sort_values(by=['Daily Green After ' + str(day+1) + ' Days Of Red'],ascending=False,inplace=True)
+                fordays = results.loc[results['Daily Green After ' + str(day+1) + ' Days Of Red']==1]
+                for ct in fordays.iloc[:winlimit].values:
+                    cticker = ct[1]
+                    curcount[cticker] = {}
+                    curcount[cticker]['count'] = day + 1
+            sortedcount = sorted(curcount.items(), key=lambda x:x[1]['count'], reverse=True)
+            bot.send_message(subscriber[1],'Green After Red Days ' + results['date'].max() + '\n\n' + tabulate(sortedcount,headers=['Ticker','Count']),parse_mode='HTML') #,tablefmt="grid"))
