@@ -26,7 +26,11 @@ if len(subscribers)>0:
         else:
             results = pd.read_csv(os.path.join(script_dir,'results_profitability.csv'))
             results = results[results['Late Start']==0]
-            results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
+            # results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
+            # results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a> - <a href='https://finviz.com/quote.ashx?t=" + results['ticker'] + "&p=d'>FZ</a>"
+            results['pptext'] = "Top 5 latest news for '" + results['desc'] + "' (Ticker: " + results['ticker'] + ") in this week. Please sort by date descending and format your answers with <date of news> - <source of news> - <news summary>"
+            results['ppurl'] = results['pptext'].apply(urllib.parse.quote)
+            results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a> - <a href='https://finviz.com/quote.ashx?t=" + results['ticker'] + "&p=d'>FZ</a> - <a href='https://clockin.cbmyportal.org/view/portal/echo?q=" + results['ppurl'] + "'>PP</a>"
 
             winlimit = 20
             curcount = {}
@@ -91,21 +95,21 @@ if len(subscribers)>0:
                     curcount[cticker]['count'] = 1
                     curcount[cticker]['marker'] = 'm'
             sortedcount = sorted(curcount.items(), key=lambda x:x[1]['count'], reverse=True)
-            bot.send_message(subscriber[1],'Recurring Tickers For ' + results['date'].max() + '\n\n' + tabulate(sortedcount,headers=['Ticker','Count','Marker']),parse_mode='HTML') #,tablefmt="grid"))
+            # bot.send_message(subscriber[1],'Recurring Tickers For ' + results['date'].max() + '\n\n' + tabulate(sortedcount,headers=['Ticker','Count','Marker']),parse_mode='HTML') #,tablefmt="grid"))
 
             results.sort_values(by=['marks'],ascending=False,inplace=True)
             tosend = results[['ticker','marks','price']].set_index('ticker')
-            bot.send_message(subscriber[1],'Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            # bot.send_message(subscriber[1],'Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             results.sort_values(by=['late_marks'],ascending=False,inplace=True)
             tosend = results[['ticker','late_marks','price']].set_index('ticker')
-            bot.send_message(subscriber[1],'Late Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            # bot.send_message(subscriber[1],'Late Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             beware = 'Beware of these props:\n'
             beware += 'Yesterday Loss: ' + str(results['Perc Yesterday Loss'].max()) + '\n'
             beware += 'Sluggish Ticker: ' + str(results['Perc Sluggish Ticker'].max()) + '\n'
             beware += 'Lower High: ' + str(results['Perc Lower High'].max()) + '\n'
-            bot.send_message(subscriber[1],beware,parse_mode='HTML') #,tablefmt="grid"))
+            # bot.send_message(subscriber[1],beware,parse_mode='HTML') #,tablefmt="grid"))
 
             perc_prop = []
             for col in results.columns:
@@ -116,7 +120,7 @@ if len(subscribers)>0:
                 cperf = {'Prop':col,'Perc':results[col].max()}
                 max_prop.append(cperf)
             max_prop.sort(key=lambda x: x['Perc'], reverse=True)
-            bot.send_message(subscriber[1],'Top Props:\n\n' + tabulate(max_prop[:20],headers='keys'),parse_mode='HTML')
+            # bot.send_message(subscriber[1],'Top Props:\n\n' + tabulate(max_prop[:20],headers='keys'),parse_mode='HTML')
 
             # results.sort_values(by=['first_range'],ascending=False,inplace=True)
             # tosend = results[['ticker','first_range','marks']].set_index('ticker')
