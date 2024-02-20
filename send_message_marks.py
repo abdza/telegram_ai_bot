@@ -136,11 +136,11 @@ if len(subscribers)>0:
             tosend = results[['ticker','diff_level']].set_index('ticker')
             bot.send_message(subscriber[1],'Diff Level\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
-            winlimit = 10
+            winlimit = 5
             curcount = {}
             results.sort_values(by=['first_body'],ascending=False,inplace=True)
             for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
+                cticker = ct[0]
                 if cticker in curcount:
                     curcount[cticker]['count'] += 1
                     curcount[cticker]['marker'] += 'b'
@@ -155,7 +155,7 @@ if len(subscribers)>0:
                     curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
             results.sort_values(by=['first_range'],ascending=False,inplace=True)
             for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
+                cticker = ct[0]
                 if cticker in curcount:
                     curcount[cticker]['count'] += 1
                     curcount[cticker]['marker'] += 'r'
@@ -170,7 +170,7 @@ if len(subscribers)>0:
                     curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
             results.sort_values(by=['gap'],ascending=False,inplace=True)
             for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
+                cticker = ct[0]
                 if cticker in curcount:
                     curcount[cticker]['count'] += 1
                     curcount[cticker]['marker'] += 'g'
@@ -185,6 +185,7 @@ if len(subscribers)>0:
                     curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
 
             sortedcount = sorted(curcount.items(), key=lambda x:x[1]['count'], reverse=True)
+            print(tabulate(sortedcount,headers=['Ticker','Count','Marker','Body','Range','Gap']))
             bot.send_message(subscriber[1],'Recurring Range Tickers For ' + results['date'].max() + '\n\n' + tabulate(sortedcount,headers=['Ticker','Count','Marker','Body','Range','Gap']),parse_mode='HTML') #,tablefmt="grid"))
 
             yesterday = results.loc[results['Yesterday Status Barely']==1]
@@ -204,7 +205,7 @@ if len(subscribers)>0:
                 results.sort_values(by=['Daily Green After ' + str(day+1) + ' Days Of Red'],ascending=False,inplace=True)
                 fordays = results.loc[results['Daily Green After ' + str(day+1) + ' Days Of Red']==1]
                 for ct in fordays.iloc[:winlimit].values:
-                    cticker = ct[1]
+                    cticker = ct[0]
                     curcount[cticker] = {}
                     curcount[cticker]['count'] = day + 1
             sortedcount = sorted(curcount.items(), key=lambda x:x[1]['count'], reverse=True)
