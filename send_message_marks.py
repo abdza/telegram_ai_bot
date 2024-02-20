@@ -148,10 +148,11 @@ if len(subscribers)>0:
                     curcount[cticker] = {}
                     curcount[cticker]['count'] = 1
                     curcount[cticker]['marker'] = 'b'
-                curcount[cticker]['body'] = results.loc[results['ticker']==cticker]['first_body'].values[0]
-                curcount[cticker]['range'] = results.loc[results['ticker']==cticker]['first_range'].values[0]
-                curcount[cticker]['gap'] = results.loc[results['ticker']==cticker]['gap'].values[0]
-                curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
+                if len(results.loc[results['ticker']==cticker]):
+                    curcount[cticker]['body'] = results.loc[results['ticker']==cticker]['first_body'].values[0]
+                    curcount[cticker]['range'] = results.loc[results['ticker']==cticker]['first_range'].values[0]
+                    curcount[cticker]['gap'] = results.loc[results['ticker']==cticker]['gap'].values[0]
+                    curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
             results.sort_values(by=['first_range'],ascending=False,inplace=True)
             for ct in results.iloc[:winlimit].values:
                 cticker = ct[1]
@@ -162,10 +163,11 @@ if len(subscribers)>0:
                     curcount[cticker] = {}
                     curcount[cticker]['count'] = 1
                     curcount[cticker]['marker'] = 'r'
-                curcount[cticker]['body'] = results.loc[results['ticker']==cticker]['first_body'].values[0]
-                curcount[cticker]['range'] = results.loc[results['ticker']==cticker]['first_range'].values[0]
-                curcount[cticker]['gap'] = results.loc[results['ticker']==cticker]['gap'].values[0]
-                curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
+                if len(results.loc[results['ticker']==cticker]):
+                    curcount[cticker]['body'] = results.loc[results['ticker']==cticker]['first_body'].values[0]
+                    curcount[cticker]['range'] = results.loc[results['ticker']==cticker]['first_range'].values[0]
+                    curcount[cticker]['gap'] = results.loc[results['ticker']==cticker]['gap'].values[0]
+                    curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
             results.sort_values(by=['gap'],ascending=False,inplace=True)
             for ct in results.iloc[:winlimit].values:
                 cticker = ct[1]
@@ -176,10 +178,11 @@ if len(subscribers)>0:
                     curcount[cticker] = {}
                     curcount[cticker]['count'] = 1
                     curcount[cticker]['marker'] = 'g'
-                curcount[cticker]['body'] = results.loc[results['ticker']==cticker]['first_body'].values[0]
-                curcount[cticker]['range'] = results.loc[results['ticker']==cticker]['first_range'].values[0]
-                curcount[cticker]['gap'] = results.loc[results['ticker']==cticker]['gap'].values[0]
-                curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
+                if len(results.loc[results['ticker']==cticker]):
+                    curcount[cticker]['body'] = results.loc[results['ticker']==cticker]['first_body'].values[0]
+                    curcount[cticker]['range'] = results.loc[results['ticker']==cticker]['first_range'].values[0]
+                    curcount[cticker]['gap'] = results.loc[results['ticker']==cticker]['gap'].values[0]
+                    curcount[cticker]['first_green'] = results.loc[results['ticker']==cticker]['First Green'].values[0]
 
             sortedcount = sorted(curcount.items(), key=lambda x:x[1]['count'], reverse=True)
             bot.send_message(subscriber[1],'Recurring Range Tickers For ' + results['date'].max() + '\n\n' + tabulate(sortedcount,headers=['Ticker','Count','Marker','Body','Range','Gap']),parse_mode='HTML') #,tablefmt="grid"))
