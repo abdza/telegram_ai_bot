@@ -36,92 +36,92 @@ if len(subscribers)>0:
 
             winlimit = 20
             curcount = {}
-            results.sort_values(by=['prev_marks'],ascending=False,inplace=True)
-            for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
-                if cticker in curcount:
-                    curcount[cticker]['count'] += 1
-                    curcount[cticker]['marker'] += 'p'
-                else:
-                    curcount[cticker] = {}
-                    curcount[cticker]['count'] = 1
-                    curcount[cticker]['marker'] = 'p'
-            results.sort_values(by=['opening_marks'],ascending=False,inplace=True)
-            for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
-                if cticker in curcount:
-                    curcount[cticker]['count'] += 1
-                    curcount[cticker]['marker'] += 'o'
-                else:
-                    curcount[cticker] = {}
-                    curcount[cticker]['count'] = 1
-                    curcount[cticker]['marker'] = 'o'
-            results.sort_values(by=['late_marks'],ascending=False,inplace=True)
-            for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
-                if cticker in curcount:
-                    curcount[cticker]['count'] += 1
-                    curcount[cticker]['marker'] += 'l'
-                else:
-                    curcount[cticker] = {}
-                    curcount[cticker]['count'] = 1
-                    curcount[cticker]['marker'] = 'l'
-            results.sort_values(by=['hour_marks'],ascending=False,inplace=True)
-            for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
-                if cticker in curcount:
-                    curcount[cticker]['count'] += 1
-                    curcount[cticker]['marker'] += 'h'
-                else:
-                    curcount[cticker] = {}
-                    curcount[cticker]['count'] = 1
-                    curcount[cticker]['marker'] = 'h'
-            results.sort_values(by=['daily_marks'],ascending=False,inplace=True)
-            for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
-                if cticker in curcount:
-                    curcount[cticker]['count'] += 1
-                    curcount[cticker]['marker'] += 'd'
-                else:
-                    curcount[cticker] = {}
-                    curcount[cticker]['count'] = 1
-                    curcount[cticker]['marker'] = 'd'
-            results.sort_values(by=['marks'],ascending=False,inplace=True)
-            for ct in results.iloc[:winlimit].values:
-                cticker = ct[1]
-                if cticker in curcount:
-                    curcount[cticker]['count'] += 1
-                    curcount[cticker]['marker'] += 'm'
-                else:
-                    curcount[cticker] = {}
-                    curcount[cticker]['count'] = 1
-                    curcount[cticker]['marker'] = 'm'
-            sortedcount = sorted(curcount.items(), key=lambda x:x[1]['count'], reverse=True)
-            # bot.send_message(subscriber[1],'Recurring Tickers For ' + results['date'].max() + '\n\n' + tabulate(sortedcount,headers=['Ticker','Count','Marker']),parse_mode='HTML') #,tablefmt="grid"))
-
-            results.sort_values(by=['marks'],ascending=False,inplace=True)
-            tosend = results[['ticker','marks','price']].set_index('ticker')
-            # bot.send_message(subscriber[1],'Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
-
-            results.sort_values(by=['late_marks'],ascending=False,inplace=True)
-            tosend = results[['ticker','late_marks','price']].set_index('ticker')
-            # bot.send_message(subscriber[1],'Late Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
-
-            beware = 'Beware of these props:\n'
-            beware += 'Yesterday Loss: ' + str(results['Perc Yesterday Loss'].max()) + '\n'
-            beware += 'Sluggish Ticker: ' + str(results['Perc Sluggish Ticker'].max()) + '\n'
-            beware += 'Lower High: ' + str(results['Perc Lower High'].max()) + '\n'
-            # bot.send_message(subscriber[1],beware,parse_mode='HTML') #,tablefmt="grid"))
-
-            perc_prop = []
-            for col in results.columns:
-                if col[0:5] == 'Perc ':
-                    perc_prop.append(col)
-            max_prop = []
-            for col in perc_prop:
-                cperf = {'Prop':col,'Perc':results[col].max()}
-                max_prop.append(cperf)
-            max_prop.sort(key=lambda x: x['Perc'], reverse=True)
+            # results.sort_values(by=['prev_marks'],ascending=False,inplace=True)
+            # for ct in results.iloc[:winlimit].values:
+            #     cticker = ct[1]
+            #     if cticker in curcount:
+            #         curcount[cticker]['count'] += 1
+            #         curcount[cticker]['marker'] += 'p'
+            #     else:
+            #         curcount[cticker] = {}
+            #         curcount[cticker]['count'] = 1
+            #         curcount[cticker]['marker'] = 'p'
+            # results.sort_values(by=['opening_marks'],ascending=False,inplace=True)
+            # for ct in results.iloc[:winlimit].values:
+            #     cticker = ct[1]
+            #     if cticker in curcount:
+            #         curcount[cticker]['count'] += 1
+            #         curcount[cticker]['marker'] += 'o'
+            #     else:
+            #         curcount[cticker] = {}
+            #         curcount[cticker]['count'] = 1
+            #         curcount[cticker]['marker'] = 'o'
+            # results.sort_values(by=['late_marks'],ascending=False,inplace=True)
+            # for ct in results.iloc[:winlimit].values:
+            #     cticker = ct[1]
+            #     if cticker in curcount:
+            #         curcount[cticker]['count'] += 1
+            #         curcount[cticker]['marker'] += 'l'
+            #     else:
+            #         curcount[cticker] = {}
+            #         curcount[cticker]['count'] = 1
+            #         curcount[cticker]['marker'] = 'l'
+            # results.sort_values(by=['hour_marks'],ascending=False,inplace=True)
+            # for ct in results.iloc[:winlimit].values:
+            #     cticker = ct[1]
+            #     if cticker in curcount:
+            #         curcount[cticker]['count'] += 1
+            #         curcount[cticker]['marker'] += 'h'
+            #     else:
+            #         curcount[cticker] = {}
+            #         curcount[cticker]['count'] = 1
+            #         curcount[cticker]['marker'] = 'h'
+            # results.sort_values(by=['daily_marks'],ascending=False,inplace=True)
+            # for ct in results.iloc[:winlimit].values:
+            #     cticker = ct[1]
+            #     if cticker in curcount:
+            #         curcount[cticker]['count'] += 1
+            #         curcount[cticker]['marker'] += 'd'
+            #     else:
+            #         curcount[cticker] = {}
+            #         curcount[cticker]['count'] = 1
+            #         curcount[cticker]['marker'] = 'd'
+            # results.sort_values(by=['marks'],ascending=False,inplace=True)
+            # for ct in results.iloc[:winlimit].values:
+            #     cticker = ct[1]
+            #     if cticker in curcount:
+            #         curcount[cticker]['count'] += 1
+            #         curcount[cticker]['marker'] += 'm'
+            #     else:
+            #         curcount[cticker] = {}
+            #         curcount[cticker]['count'] = 1
+            #         curcount[cticker]['marker'] = 'm'
+            # sortedcount = sorted(curcount.items(), key=lambda x:x[1]['count'], reverse=True)
+            # # bot.send_message(subscriber[1],'Recurring Tickers For ' + results['date'].max() + '\n\n' + tabulate(sortedcount,headers=['Ticker','Count','Marker']),parse_mode='HTML') #,tablefmt="grid"))
+            #
+            # results.sort_values(by=['marks'],ascending=False,inplace=True)
+            # tosend = results[['ticker','marks','price']].set_index('ticker')
+            # # bot.send_message(subscriber[1],'Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            #
+            # results.sort_values(by=['late_marks'],ascending=False,inplace=True)
+            # tosend = results[['ticker','late_marks','price']].set_index('ticker')
+            # # bot.send_message(subscriber[1],'Late Marks\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
+            #
+            # beware = 'Beware of these props:\n'
+            # beware += 'Yesterday Loss: ' + str(results['Perc Yesterday Loss'].max()) + '\n'
+            # beware += 'Sluggish Ticker: ' + str(results['Perc Sluggish Ticker'].max()) + '\n'
+            # beware += 'Lower High: ' + str(results['Perc Lower High'].max()) + '\n'
+            # # bot.send_message(subscriber[1],beware,parse_mode='HTML') #,tablefmt="grid"))
+            #
+            # perc_prop = []
+            # for col in results.columns:
+            #     if col[0:5] == 'Perc ':
+            #         perc_prop.append(col)
+            # max_prop = []
+            # for col in perc_prop:
+            #     cperf = {'Prop':col,'Perc':results[col].max()}
+            #     max_prop.append(cperf)
+            # max_prop.sort(key=lambda x: x['Perc'], reverse=True)
             # bot.send_message(subscriber[1],'Top Props:\n\n' + tabulate(max_prop[:20],headers='keys'),parse_mode='HTML')
 
             # results.sort_values(by=['first_range'],ascending=False,inplace=True)
