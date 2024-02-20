@@ -4,6 +4,7 @@ import settings
 import os
 import sys
 import sqlite3
+import urllib.parse
 import datetime
 import pandas as pd
 from tabulate import tabulate
@@ -30,6 +31,7 @@ if len(subscribers)>0:
             results['pptext'] = "Top 5 latest news for '" + results['desc'] + "' (Ticker: " + results['ticker'] + ") in this week. Please sort by date descending and format your answers with <date of news> - <source of news> - <news summary>"
             results['ppurl'] = results['pptext'].apply(urllib.parse.quote)
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a> - <a href='https://finviz.com/quote.ashx?t=" + results['ticker'] + "&p=d'>FZ</a> - <a href='https://clockin.cbmyportal.org/view/portal/echo?q=" + results['ppurl'] + "'>PP</a>"
+            results = results.drop(columns=['pptext','ppurl'])
 
             tosend = results.loc[results['type']=='double']
             tosend.set_index('ticker',inplace=True)
@@ -62,6 +64,7 @@ if len(subscribers)>0:
             results['pptext'] = "Top 5 latest news for '" + results['desc'] + "' (Ticker: " + results['ticker'] + ") in this week. Please sort by date descending and format your answers with <date of news> - <source of news> - <news summary>"
             results['ppurl'] = results['pptext'].apply(urllib.parse.quote)
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a> - <a href='https://finviz.com/quote.ashx?t=" + results['ticker'] + "&p=d'>FZ</a> - <a href='https://clockin.cbmyportal.org/view/portal/echo?q=" + results['ppurl'] + "'>PP</a>"
+            results = results.drop(columns=['pptext','ppurl'])
             results = results.sort_values(by=['range'],ascending=False)
             tosend = results.iloc[:20]
             tosend = tosend[['ticker','range','date']]
