@@ -133,7 +133,7 @@ if len(subscribers)>0:
             # bot.send_message(subscriber[1],'First Body\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             results.sort_values(by=['diff_level'],ascending=False,inplace=True)
-            tosend = results[['ticker','diff_level','marks']].set_index('ticker')
+            tosend = results[['ticker','diff_level']].set_index('ticker')
             bot.send_message(subscriber[1],'Diff Level\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             winlimit = 10
@@ -187,13 +187,13 @@ if len(subscribers)>0:
             yesterday = results.loc[results['Yesterday Status Barely']==1]
             yesterday = yesterday.loc[yesterday['2 Days Ago Status Barely']==1]
             yesterday.sort_values(by=['price'],inplace=True)
-            tosend = yesterday[['ticker','marks','price']]
+            tosend = yesterday[['ticker','price']]
             bot.send_message(subscriber[1],'2 Days Barely\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             yesterday = results.loc[results['Yesterday Status Barely']==1]
             yesterday = yesterday.loc[yesterday['2 Days Ago Status Barely']==0]
             yesterday.sort_values(by=['price'],inplace=True)
-            tosend = yesterday[['ticker','marks','price']]
+            tosend = yesterday[['ticker','price']]
             bot.send_message(subscriber[1],'Only Yesterday Barely\n\n' + tabulate(tosend.iloc[:10],headers="keys"),parse_mode='HTML') #,tablefmt="grid"))
 
             curcount = {}
