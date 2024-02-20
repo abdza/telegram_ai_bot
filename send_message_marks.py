@@ -5,6 +5,7 @@ import os
 import sys
 import sqlite3
 import datetime
+import urllib.parse
 import pandas as pd
 from tabulate import tabulate
 
@@ -24,13 +25,14 @@ if len(subscribers)>0:
             toout = sys.argv[1].encode('utf-8').decode('unicode_escape')
             bot.send_message(subscriber[1],toout)
         else:
-            results = pd.read_csv(os.path.join(script_dir,'results_profitability.csv'))
+            results = pd.read_csv(os.path.join(script_dir,'results.csv'))
             results = results[results['Late Start']==0]
             # results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a>"
             # results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a> - <a href='https://finviz.com/quote.ashx?t=" + results['ticker'] + "&p=d'>FZ</a>"
             results['pptext'] = "Top 5 latest news for '" + results['desc'] + "' (Ticker: " + results['ticker'] + ") in this week. Please sort by date descending and format your answers with <date of news> - <source of news> - <news summary>"
             results['ppurl'] = results['pptext'].apply(urllib.parse.quote)
             results['ticker'] = "<a href='https://tradingview.com/chart?symbol=" + results['ticker'] + "'>" + results['ticker'] + "</a> - <a href='https://finviz.com/quote.ashx?t=" + results['ticker'] + "&p=d'>FZ</a> - <a href='https://clockin.cbmyportal.org/view/portal/echo?q=" + results['ppurl'] + "'>PP</a>"
+            results = results.drop(columns=['ppurl','pptext'])
 
             winlimit = 20
             curcount = {}
