@@ -34,7 +34,8 @@ script_path = os.path.abspath(__file__)
 # Get the directory containing the current script
 script_dir = os.path.dirname(script_path)
 
-chat_model = "gpt-4-1106-preview"
+chat_model = "gpt-4o"
+# chat_model = "gpt-4-1106-preview"
 # chat_model = "gpt-4"
 # chat_model = "gpt-3.5-turbo"
 
@@ -60,7 +61,8 @@ else:
         name="Telegram Bot",
         instructions=open_file('system_ai_friend.txt'),
         tools=[{"type": "code_interpreter"},{"type": "retrieval"}],
-        model="gpt-4-1106-preview"
+        model="gpt-4o"
+        # model="gpt-4-1106-preview"
     )
 
 def update_db():
@@ -412,7 +414,8 @@ def photo_processing(message):
             with open(os.path.join(script_dir,file_info.file_path), 'wb') as new_file:
                 new_file.write(downloaded_file)
             response = AIClient.chat.completions.create(
-                model="gpt-4-vision-preview",
+                #model="gpt-4-vision-preview",
+                model="gpt-4o",
                 messages=[
                 {
                     "role": "user",
