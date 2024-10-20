@@ -37,7 +37,7 @@ script_path = os.path.abspath(__file__)
 # Get the directory containing the current script
 script_dir = os.path.dirname(script_path)
 
-chat_model = "gpt-4o"
+chat_model = "gpt-4o-mini"
 # chat_model = "gpt-4-1106-preview"
 # chat_model = "gpt-4"
 # chat_model = "gpt-3.5-turbo"
@@ -66,7 +66,7 @@ else:
         name="Telegram Bot",
         instructions=open_file("system_mini.txt"),
         tools=[{"type": "code_interpreter"}, {"type": "retrieval"}],
-        model="gpt-4o",
+        model="gpt-4o-mini",
         # model="gpt-4-1106-preview"
     )
 
